@@ -1,5 +1,6 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
 
 export default function HomeScreen() {
   return (
@@ -15,7 +16,10 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <TouchableOpacity style={styles.searchCard}>
+      <TouchableOpacity
+        style={styles.searchCard}
+        onPress={() => router.push("/find-ride")}
+        >
         <View style={styles.locationDot} />
         <View>
           <Text style={styles.searchLabel}>Find a ride</Text>
@@ -27,13 +31,19 @@ export default function HomeScreen() {
       </TouchableOpacity>
 
       <View style={styles.actions}>
-        <TouchableOpacity style={styles.actionCard}>
+        <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => router.push("/find-ride")}
+        >
           <Text style={styles.actionIcon}>🚗</Text>
           <Text style={styles.actionTitle}>Find Ride</Text>
           <Text style={styles.actionSubtitle}>Share a ride</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionCard}>
+        <TouchableOpacity
+            style={styles.actionCard}
+            onPress={() => router.push("/offer-ride")}
+        >
           <Text style={styles.actionIcon}>➕</Text>
           <Text style={styles.actionTitle}>Offer Ride</Text>
           <Text style={styles.actionSubtitle}>Drive together</Text>
