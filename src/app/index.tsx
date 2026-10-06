@@ -1,19 +1,30 @@
 import { useEffect } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 
+import { useAuthStore } from "@/store/auth.store";
+
 export default function SplashScreen() {
+  const { isLoading, isAuthenticated, restoreSession } =
+    useAuthStore();
+
   useEffect(() => {
+    restoreSession();
+  }, [restoreSession]);
+
+  useEffect(() => {
+    if (isLoading) return;
+
     const timer = setTimeout(() => {
-      router.replace("/home");
-    }, 1800);
+      if (isAuthenticated) {
+        router.replace("/home");
+      } else {
+        router.replace("/auth/login");
+      }
+    }, 1200);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [isLoading, isAuthenticated]);
 
   return (
     <View style={styles.container}>
@@ -28,9 +39,9 @@ export default function SplashScreen() {
       </Text>
 
       <View style={styles.loader}>
-        <View style={styles.loaderDot} />
-        <View style={styles.loaderDot} />
-        <View style={styles.loaderDot} />
+        <View style={styles.dot} />
+        <View style={styles.dot} />
+        <View style={styles.dot} />
       </View>
     </View>
   );
@@ -64,7 +75,6 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: "900",
     color: "#FFFFFF",
-    letterSpacing: -1,
   },
 
   tagline: {
@@ -81,7 +91,7 @@ const styles = StyleSheet.create({
     gap: 7,
   },
 
-  loaderDot: {
+  dot: {
     width: 7,
     height: 7,
     borderRadius: 4,
