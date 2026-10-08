@@ -1,98 +1,87 @@
 import { create } from "zustand";
+
 import {
   getCurrentUser,
+  getStoredToken,
   logout as logoutService,
+  User,
 } from "@/services/auth/auth.service";
-import { User } from "@/types/auth";
-
-const normalizeUser = (user: Record<string, any>): User => {
-  const fullName =
-    user.fullName ??
-    user.name ??
-    [user.firstName, user.lastName].filter(Boolean).join(" ") ??
-    "";
-
-  return {
-    ...user,
-    fullName,
-  } as User;
-};
-
-const getStoredToken = async (): Promise<string | null> => {
-  try {
-    const token = localStorage.getItem("auth_token");
-    return token ?? null;
-  } catch {
-    return null;
-  }
-};
 
 type AuthState = {
   user: User | null;
   token: string | null;
-  isLoading: boolean;
   isAuthenticated: boolean;
+  isLoading: boolean;
 
-  restoreSession: () => Promise<void>;
   setSession: (token: string, user: User) => void;
+  restoreSession: () => Promise<void>;
   logout: () => Promise<void>;
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   token: null,
-  isLoading: true,
   isAuthenticated: false,
-
-  restoreSession: async () => {
-    try {
-      const token = await getStoredToken();
-
-      if (!token) {
-        set({
-          isLoading: false,
-          isAuthenticated: false,
-        });
-        return;
-      }
-
-      const user = normalizeUser(await getCurrentUser());
-
-      set({
-        token,
-        user,
-        isLoading: false,
-        isAuthenticated: true,
-      });
-    } catch {
-      await logoutService();
-
-      set({
-        token: null,
-        user: null,
-        isLoading: false,
-        isAuthenticated: false,
-      });
-    }
-  },
+  isLoading: true,
 
   setSession: (token, user) => {
     set({
       token,
       user,
-      isLoading: false,
       isAuthenticated: true,
+      isLoading: false,
     });
   },
 
-  logout: async () => {
-    await logoutService();
+  restoreSession: async () => {
+    try {
+      set({ isLoading: true });
 
-    set({
-      token: null,
-      user: null,
-      isLoading: false,
-      isAuthenticated: false,
-    });
+      const token = await getStoredToken();
+
+      if (!token) {
+        set({
+          token: null,
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
+
+        return;
+      }
+
+      const user = await getCurrentUser();
+
+      set({
+        token,
+        user,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+    } catch (error) {
+      console.log("SESSION RESTORE FAILED:", error);
+
+      await logoutService();
+
+      set({
+        token: null,
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+      });
+    }
+  },
+
+  logout: async () => {
+    try {
+      await logoutService();
+    } finally {
+      set({
+        token: null,
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+      });
+    }
   },
 }));

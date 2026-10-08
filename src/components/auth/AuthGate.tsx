@@ -11,10 +11,15 @@ type Props = {
 export default function AuthGate({ children }: Props) {
   const segments = useSegments();
 
-const {
-  isAuthenticated,
-  isLoading,
-} = useAuthStore();
+  const {
+    isAuthenticated,
+    isLoading,
+    restoreSession,
+  } = useAuthStore();
+
+  useEffect(() => {
+    restoreSession();
+  }, [restoreSession]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -27,7 +32,7 @@ const {
     }
 
     if (isAuthenticated && inAuthGroup) {
-      router.replace("/home");
+      router.replace("/(tabs)/home");
     }
   }, [isAuthenticated, isLoading, segments]);
 

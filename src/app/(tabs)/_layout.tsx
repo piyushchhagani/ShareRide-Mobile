@@ -1,24 +1,21 @@
-import { Text } from "react-native";
 import { Tabs } from "expo-router";
+import { Text } from "react-native";
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-
         tabBarActiveTintColor: "#2563EB",
         tabBarInactiveTintColor: "#94A3B8",
-
         tabBarStyle: {
-          height: 70,
+          height: 68,
           paddingTop: 8,
           paddingBottom: 10,
+          backgroundColor: "#FFFFFF",
           borderTopWidth: 1,
           borderTopColor: "#E2E8F0",
-          backgroundColor: "#FFFFFF",
         },
-
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: "600",
@@ -30,27 +27,7 @@ export default function TabsLayout() {
         options={{
           title: "Home",
           tabBarIcon: ({ color }) => (
-            <Text style={{ color, fontSize: 20 }}>⌂</Text>
-          ),
-        }}
-      />
-
-      <Tabs.Screen
-        name="find-ride"
-        options={{
-          title: "Find Ride",
-          tabBarIcon: ({ color }) => (
-            <Text style={{ color, fontSize: 20 }}>⌖</Text>
-          ),
-        }}
-      />
-
-      <Tabs.Screen
-        name="offer-ride"
-        options={{
-          title: "Offer Ride",
-          tabBarIcon: ({ color }) => (
-            <Text style={{ color, fontSize: 20 }}>＋</Text>
+            <Text style={{ fontSize: 20, color }}>⌂</Text>
           ),
         }}
       />
@@ -60,7 +37,17 @@ export default function TabsLayout() {
         options={{
           title: "Rides",
           tabBarIcon: ({ color }) => (
-            <Text style={{ color, fontSize: 20 }}>▣</Text>
+            <Text style={{ fontSize: 20, color }}>▣</Text>
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="offer-ride"
+        options={{
+          title: "Offer",
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 20, color }}>＋</Text>
           ),
         }}
       />
@@ -70,8 +57,15 @@ export default function TabsLayout() {
         options={{
           title: "Profile",
           tabBarIcon: ({ color }) => (
-            <Text style={{ color, fontSize: 20 }}>●</Text>
+            <Text style={{ fontSize: 20, color }}>◯</Text>
           ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="find-ride"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

@@ -36,20 +36,29 @@ export default function LoginScreen() {
         password,
       });
 
+      console.log("LOGIN SCREEN SUCCESS:", response);
+
       setSession(response.token, {
         id: response.id,
+        name: response.name,
         email: response.email,
-        fullName: (response as any).fullName ?? "",
-        role: response.role as any,
+        role: response.role,
       });
 
-      router.replace("/home");
+      router.replace("/(tabs)/home");
     } catch (error: any) {
+      console.log("LOGIN SCREEN ERROR:", error);
+      console.log(
+        "LOGIN SCREEN RESPONSE:",
+        error?.response?.data
+      );
+
       const message =
         error?.response?.data?.message ||
-        "Unable to login. Please check your credentials.";
+        error?.message ||
+        "Unable to login. Please try again.";
 
-      Alert.alert("Login failed", message);
+      Alert.alert("Login failed", String(message));
     } finally {
       setIsLoading(false);
     }
@@ -80,6 +89,7 @@ export default function LoginScreen() {
             placeholder="Enter your email"
             placeholderTextColor="#94A3B8"
             autoCapitalize="none"
+            autoCorrect={false}
             keyboardType="email-address"
             style={styles.input}
           />
@@ -92,6 +102,8 @@ export default function LoginScreen() {
             placeholder="Enter your password"
             placeholderTextColor="#94A3B8"
             secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
             style={styles.input}
           />
 
@@ -116,7 +128,7 @@ export default function LoginScreen() {
           style={styles.registerButton}
         >
           <Text style={styles.registerText}>
-           Don&apos;t have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Text style={styles.registerLink}>Register</Text>
           </Text>
         </TouchableOpacity>

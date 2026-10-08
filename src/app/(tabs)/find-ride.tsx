@@ -1,282 +1,446 @@
 import { useState } from "react";
 import {
+  Modal,
+  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import DateTimePicker from "@expo/ui/community/datetime-picker";
+
 import LocationSelector from "@/components/location/LocationSelector";
+import { useRideStore } from "@/store/ride.store";
+import { goBackSafely } from "@/utils/navigation";
 
-export default function FindRideScreen() {
- const [destination, setDestination] = useState("");
- const [selectedDate, setSelectedDate] = useState(() => {
-  const date = new Date();
-  date.setMinutes(0);
-  date.setSeconds(0);
-  date.setMilliseconds(0);
-  date.setHours(date.getHours() + 1);
-  return date;
-});
-
-  const [showPicker, setShowPicker] = useState(false);
-
-  const canContinue = destination.trim().length > 0;
-
-  const formattedDate = selectedDate.toLocaleString([], {
+function formatDate(date: Date) {
+  return date.toLocaleString([], {
     weekday: "short",
     day: "numeric",
     month: "short",
+  });
+}
+
+function formatTime(date: Date) {
+  return date.toLocaleString([], {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+export default function FindRideScreen() {
+  const { pickup, destination } = useRideStore();
+
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const date = new Date();
+
+    date.setMinutes(0);
+    date.setSeconds(0);
+    date.setMilliseconds(0);
+
+    date.setHours(date.getHours() + 1);
+
+    return date;
+  });
+
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [seats, setSeats] = useState(1);
+
+  const canContinue = !!pickup && !!destination;
+
+  const changeTime = (hours: number) => {
+    const next = new Date(selectedDate);
+    next.setHours(hours);
+    next.setMinutes(0);
+    next.setSeconds(0);
+    next.setMilliseconds(0);
+
+    setSelectedDate(next);
+    setShowTimePicker(false);
+  };
+
+  const handleFindMatches = () => {
+    if (!pickup || !destination) {
+      return;
+    }
+
+    router.push({
+      pathname: "/ride-results",
+      params: {
+        departureTime: selectedDate.toISOString(),
+        seats: seats.toString(),
+      },
+    });
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <TouchableOpacity onPress={() => router.back()}>
-        <Text style={styles.back}>‹ Back</Text>
-      </TouchableOpacity>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+      >
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => goBackSafely()}
+        >
+          <Text style={styles.backText}>‹ Back</Text>
+        </TouchableOpacity>
 
-      <View style={styles.header}>
         <Text style={styles.title}>Find a ride</Text>
+
         <Text style={styles.subtitle}>
           Find students travelling your way.
         </Text>
-      </View>
-    <LocationSelector
-      label="Pickup location"
-      value="Using your current location"
-      />
-      {/* Destination */}
-      <TouchableOpacity
-  style={styles.card}
-  onPress={() => router.push("/location")}
->
-  <View style={styles.dot} />
 
-  <View style={styles.field}>
-    <Text style={styles.label}>Destination</Text>
-    <Text style={styles.value}>
-      {destination || "Where are you going?"}
-    </Text>
-  </View>
+        <LocationSelector />
 
-  <Text style={styles.arrow}>›</Text>
-</TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={styles.timeCard}
+          onPress={() => setShowTimePicker(true)}
+        >
+          <View style={styles.timeIcon}>
+            <Text style={styles.timeIconText}>◷</Text>
+          </View>
 
-      {/* Date & Time */}
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => setShowPicker(true)}
-      >
-        <Text style={styles.calendar}>◷</Text>
+          <View style={styles.timeContent}>
+            <Text style={styles.timeLabel}>When</Text>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>When</Text>
+            <Text style={styles.timeValue}>
+              {formatDate(selectedDate)}, {formatTime(selectedDate)}
+            </Text>
+          </View>
 
-          <Text style={styles.value}>
-            {showPicker ? "Select date & time" : formattedDate}
-          </Text>
-        </View>
+          <Text style={styles.arrow}>›</Text>
+        </TouchableOpacity>
 
-        <Text style={styles.arrow}>›</Text>
-      </TouchableOpacity>
-
-      {/* Native picker */}
-      {showPicker && (
-        <View style={styles.pickerContainer}>
-          <DateTimePicker
-            value={selectedDate}
-            mode="datetime"
-            presentation="dialog"
-            onValueChange={(_, date) => {
-              if (date) {
-                setSelectedDate(date);
-                setShowPicker(false);
-              }
-            }}
-          />
-        </View>
-      )}
-
-      {/* Preferences */}
-      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Preferences</Text>
 
         <View style={styles.preferenceRow}>
-          <TouchableOpacity style={styles.preference}>
+          <View style={styles.preferenceCard}>
             <Text style={styles.preferenceIcon}>👥</Text>
-            <Text style={styles.preferenceText}>Any rider</Text>
-          </TouchableOpacity>
 
-          <TouchableOpacity style={styles.preference}>
+            <Text style={styles.preferenceTitle}>Any rider</Text>
+
+            <Text style={styles.preferenceSubtitle}>
+              Student community
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.preferenceCard,
+              seats === 2 && styles.preferenceCardActive,
+            ]}
+            onPress={() => setSeats(seats === 1 ? 2 : 1)}
+          >
             <Text style={styles.preferenceIcon}>💺</Text>
-            <Text style={styles.preferenceText}>1 seat</Text>
+
+            <Text style={styles.preferenceTitle}>
+              {seats} {seats === 1 ? "seat" : "seats"}
+            </Text>
+
+            <Text style={styles.preferenceSubtitle}>
+              Tap to change
+            </Text>
           </TouchableOpacity>
         </View>
-      </View>
 
-      <View style={styles.spacer} />
+        <TouchableOpacity
+          disabled={!canContinue}
+          activeOpacity={0.85}
+          style={[
+            styles.findButton,
+            !canContinue && styles.findButtonDisabled,
+          ]}
+          onPress={handleFindMatches}
+        >
+          <Text style={styles.findButtonText}>Find Matches</Text>
+        </TouchableOpacity>
+      </ScrollView>
 
-      <TouchableOpacity
-        disabled={!canContinue}
-        style={[
-          styles.button,
-          !canContinue && styles.buttonDisabled,
-        ]}
+      <Modal
+        visible={showTimePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowTimePicker(false)}
       >
-        <Text style={styles.buttonText}>Find Matches</Text>
-      </TouchableOpacity>
+        <View style={styles.modalOverlay}>
+          <View style={styles.timeModal}>
+            <View style={styles.modalHandle} />
+
+            <Text style={styles.modalTitle}>Choose departure time</Text>
+
+            <Text style={styles.modalSubtitle}>
+              {formatDate(selectedDate)}
+            </Text>
+
+            <View style={styles.timeGrid}>
+              {[7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
+                .map((hour) => {
+                  const displayHour =
+                    hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+
+                  const suffix = hour >= 12 ? "PM" : "AM";
+
+                  const active = selectedDate.getHours() === hour;
+
+                  return (
+                    <TouchableOpacity
+                      key={hour}
+                      style={[
+                        styles.timeOption,
+                        active && styles.timeOptionActive,
+                      ]}
+                      onPress={() => changeTime(hour)}
+                    >
+                      <Text
+                        style={[
+                          styles.timeOptionText,
+                          active && styles.timeOptionTextActive,
+                        ]}
+                      >
+                        {displayHour}:00 {suffix}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+            </View>
+
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setShowTimePicker(false)}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 20,
+    backgroundColor: "#F7F9FC",
   },
 
-  back: {
-    marginTop: 8,
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#2563EB",
+  content: {
+    padding: 20,
+    paddingBottom: 40,
   },
 
-  header: {
-    marginTop: 28,
+  backButton: {
     marginBottom: 24,
   },
 
-  title: {
-    fontSize: 30,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-
-  subtitle: {
-    marginTop: 7,
-    fontSize: 15,
-    color: "#64748B",
-  },
-
-  card: {
-    minHeight: 76,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-
-  dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#2563EB",
-    marginRight: 14,
-  },
-
-  calendar: {
-    width: 30,
-    fontSize: 24,
+  backText: {
+    fontSize: 18,
+    fontWeight: "700",
     color: "#2563EB",
   },
 
-  field: {
-    flex: 1,
+  title: {
+    fontSize: 42,
+    fontWeight: "800",
+    color: "#111827",
   },
 
-  label: {
-    fontSize: 12,
+  subtitle: {
+    marginTop: 6,
+    marginBottom: 28,
+    fontSize: 18,
     color: "#64748B",
-    marginBottom: 5,
   },
 
-  input: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#0F172A",
-    padding: 0,
+  timeCard: {
+    marginTop: 24,
+    minHeight: 112,
+    borderRadius: 28,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
 
-  value: {
+  timeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EFF6FF",
+  },
+
+  timeIconText: {
+    fontSize: 28,
+    color: "#2563EB",
+  },
+
+  timeContent: {
+    flex: 1,
+    marginLeft: 18,
+  },
+
+  timeLabel: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#0F172A",
+    color: "#64748B",
+    marginBottom: 6,
+  },
+
+  timeValue: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
   },
 
   arrow: {
-    fontSize: 28,
-    color: "#94A3B8",
-  },
-
-  pickerContainer: {
-    position: "absolute",
-    width: 1,
-    height: 1,
-  },
-
-  section: {
-    marginTop: 18,
+    fontSize: 32,
+    color: "#CBD5E1",
   },
 
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#0F172A",
-    marginBottom: 12,
+    marginTop: 34,
+    marginBottom: 16,
+    fontSize: 25,
+    fontWeight: "800",
+    color: "#111827",
   },
 
   preferenceRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 14,
   },
 
-  preference: {
+  preferenceCard: {
     flex: 1,
+    minHeight: 145,
+    padding: 20,
+    borderRadius: 24,
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 16,
+  },
+
+  preferenceCardActive: {
+    borderWidth: 2,
+    borderColor: "#2563EB",
   },
 
   preferenceIcon: {
-    fontSize: 22,
-    marginBottom: 8,
+    fontSize: 30,
+    marginBottom: 18,
   },
 
-  preferenceText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#0F172A",
+  preferenceTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#111827",
   },
 
-  spacer: {
-    flex: 1,
+  preferenceSubtitle: {
+    marginTop: 5,
+    fontSize: 13,
+    color: "#94A3B8",
   },
 
-  button: {
-    height: 56,
-    borderRadius: 17,
-    backgroundColor: "#2563EB",
+  findButton: {
+    marginTop: 42,
+    height: 64,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
+    backgroundColor: "#2563EB",
   },
 
-  buttonDisabled: {
-    backgroundColor: "#CBD5E1",
+  findButtonDisabled: {
+    backgroundColor: "#94A3B8",
   },
 
-  buttonText: {
+  findButtonText: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 20,
+    fontWeight: "800",
+  },
+
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+  },
+
+  timeModal: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    paddingBottom: 34,
+  },
+
+  modalHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 5,
+    backgroundColor: "#CBD5E1",
+    alignSelf: "center",
+    marginBottom: 22,
+  },
+
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#111827",
+  },
+
+  modalSubtitle: {
+    marginTop: 4,
+    marginBottom: 20,
+    fontSize: 15,
+    color: "#64748B",
+  },
+
+  timeGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+
+  timeOption: {
+    width: "23%",
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: "#F1F5F9",
+    alignItems: "center",
+  },
+
+  timeOptionActive: {
+    backgroundColor: "#2563EB",
+  },
+
+  timeOptionText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#334155",
+  },
+
+  timeOptionTextActive: {
+    color: "#FFFFFF",
+  },
+
+  cancelButton: {
+    marginTop: 20,
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+
+  cancelText: {
+    color: "#2563EB",
+    fontSize: 17,
     fontWeight: "700",
   },
 });
