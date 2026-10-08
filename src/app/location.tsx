@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -14,13 +14,13 @@ import { useLocalSearchParams } from "expo-router";
 import * as Location from "expo-location";
 
 import { useRideStore } from "@/store/ride.store";
+import {
+  LocationPoint,
+  useLocationStore,
+} from "@/store/location.store";
 import { goBackSafely } from "@/utils/navigation";
 
-type SearchResult = {
-  address: string;
-  latitude: number;
-  longitude: number;
-};
+type SearchResult = LocationPoint;
 
 export default function LocationScreen() {
   const { type } = useLocalSearchParams<{
@@ -29,17 +29,35 @@ export default function LocationScreen() {
 
   const { setPickup, setDestination } = useRideStore();
 
+  const {
+    currentLocation,
+    setCurrentLocation,
+  } = useLocationStore();
+
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [currentLocation, setCurrentLocation] =
-    useState<SearchResult | null>(null);
-
   const [loading, setLoading] = useState(false);
   const [locationLoading, setLocationLoading] =
     useState(true);
 
+  const searchTimeout = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+
+  const searchRequest = useRef<AbortController | null>(
+    null
+  );
+
   useEffect(() => {
     loadCurrentLocation();
+
+    return () => {
+      if (searchTimeout.current) {
+        clearTimeout(searchTimeout.current);
+      }
+
+      searchRequest.current?.abort();
+    };
   }, []);
 
   const loadCurrentLocation = async () => {
@@ -70,8 +88,7 @@ export default function LocationScreen() {
           {
             headers: {
               Accept: "application/json",
-              "User-Agent":
-                "ShareRide-Mobile/1.0",
+              "User-Agent": "ShareRide-Mobile/1.0",
             },
           }
         );
@@ -82,62 +99,69 @@ export default function LocationScreen() {
           address =
             data.display_name || address;
         }
-      } catch (error) {
-        console.log(
-          "REVERSE LOCATION ERROR:",
-          error
-        );
+      } catch {
+        // Coordinates remain as fallback address.
       }
 
-      setCurrentLocation({
+      const location: LocationPoint = {
         address,
         latitude,
         longitude,
-      });
-    } catch (error) {
-      console.log(
-        "CURRENT LOCATION ERROR:",
-        error
-      );
+      };
+
+      setCurrentLocation(location);
+    } catch {
+      setCurrentLocation(null);
     } finally {
       setLocationLoading(false);
     }
   };
 
-  const searchLocation = async (
-    text: string
-  ) => {
+  const searchLocation = (text: string) => {
     setQuery(text);
 
-    if (text.trim().length < 2) {
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+    }
+
+    searchRequest.current?.abort();
+
+    const trimmed = text.trim();
+
+    if (trimmed.length < 3) {
       setResults([]);
+      setLoading(false);
       return;
     }
 
+    searchTimeout.current = setTimeout(() => {
+      performSearch(trimmed);
+    }, 700);
+  };
+
+  const performSearch = async (text: string) => {
     try {
       setLoading(true);
 
-      /*
-       * Prioritize Nagpur because ShareRide
-       * is currently being developed/tested
-       * around the campus.
-       */
+      const controller = new AbortController();
+      searchRequest.current = controller;
+
       const searchQuery =
-        `${text.trim()}, Nagpur, Maharashtra, India`;
+        `${text}, Nagpur, Maharashtra, India`;
 
       const url =
         `https://nominatim.openstreetmap.org/search` +
         `?format=jsonv2` +
         `&q=${encodeURIComponent(searchQuery)}` +
-        `&limit=10` +
+        `&limit=8` +
         `&addressdetails=1` +
         `&countrycodes=in`;
 
       const response = await fetch(url, {
+        signal: controller.signal,
         headers: {
           Accept: "application/json",
-          "User-Agent":
-            "ShareRide-Mobile/1.0",
+          "User-Agent": "ShareRide-Mobile/1.0",
         },
       });
 
@@ -149,59 +173,24 @@ export default function LocationScreen() {
 
       const data = await response.json();
 
-      let formatted: SearchResult[] =
-        data.map((item: any) => ({
+      const formatted: SearchResult[] = data
+        .map((item: any) => ({
           address:
-            item.display_name ||
-            text.trim(),
+            item.display_name || text,
           latitude: Number(item.lat),
           longitude: Number(item.lon),
-        }));
-
-      /*
-       * If Nagpur-specific search gives no result,
-       * retry globally in India.
-       */
-      if (formatted.length === 0) {
-        const fallbackUrl =
-          `https://nominatim.openstreetmap.org/search` +
-          `?format=jsonv2` +
-          `&q=${encodeURIComponent(text.trim())}` +
-          `&limit=10` +
-          `&addressdetails=1` +
-          `&countrycodes=in`;
-
-        const fallbackResponse =
-          await fetch(fallbackUrl, {
-            headers: {
-              Accept: "application/json",
-              "User-Agent":
-                "ShareRide-Mobile/1.0",
-            },
-          });
-
-        if (fallbackResponse.ok) {
-          const fallbackData =
-            await fallbackResponse.json();
-
-          formatted = fallbackData.map(
-            (item: any) => ({
-              address:
-                item.display_name ||
-                text.trim(),
-              latitude: Number(item.lat),
-              longitude: Number(item.lon),
-            })
-          );
-        }
-      }
+        }))
+        .filter(
+          (item: SearchResult) =>
+            Number.isFinite(item.latitude) &&
+            Number.isFinite(item.longitude)
+        );
 
       setResults(formatted);
-    } catch (error) {
-      console.log(
-        "LOCATION SEARCH ERROR:",
-        error
-      );
+    } catch (error: any) {
+      if (error?.name === "AbortError") {
+        return;
+      }
 
       setResults([]);
     } finally {
@@ -212,11 +201,6 @@ export default function LocationScreen() {
   const selectLocation = (
     location: SearchResult
   ) => {
-    console.log(
-      "SELECTED LOCATION:",
-      location
-    );
-
     Keyboard.dismiss();
 
     if (type === "destination") {
@@ -226,6 +210,18 @@ export default function LocationScreen() {
     }
 
     goBackSafely();
+  };
+
+  const clearSearch = () => {
+    if (searchTimeout.current) {
+      clearTimeout(searchTimeout.current);
+    }
+
+    searchRequest.current?.abort();
+
+    setQuery("");
+    setResults([]);
+    setLoading(false);
   };
 
   const title =
@@ -238,13 +234,9 @@ export default function LocationScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() =>
-            goBackSafely()
-          }
+          onPress={() => goBackSafely()}
         >
-          <Text style={styles.back}>
-            ‹
-          </Text>
+          <Text style={styles.back}>‹</Text>
         </TouchableOpacity>
 
         <Text style={styles.title}>
@@ -268,14 +260,14 @@ export default function LocationScreen() {
           placeholderTextColor="#94A3B8"
           style={styles.input}
           autoFocus
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
         />
 
         {query.length > 0 && (
           <TouchableOpacity
-            onPress={() => {
-              setQuery("");
-              setResults([]);
-            }}
+            onPress={clearSearch}
           >
             <Text style={styles.clear}>
               ×
@@ -339,6 +331,7 @@ export default function LocationScreen() {
           <ActivityIndicator
             color="#2563EB"
           />
+
           <Text style={styles.loadingText}>
             Searching locations...
           </Text>
@@ -380,13 +373,6 @@ export default function LocationScreen() {
               >
                 {item.address}
               </Text>
-
-              <Text
-                style={styles.coordinates}
-              >
-                {item.latitude.toFixed(6)},{" "}
-                {item.longitude.toFixed(6)}
-              </Text>
             </View>
 
             <Text style={styles.arrow}>
@@ -396,7 +382,7 @@ export default function LocationScreen() {
         )}
         ListEmptyComponent={
           !loading &&
-          query.trim().length >= 2 ? (
+          query.trim().length >= 3 ? (
             <View style={styles.empty}>
               <Text style={styles.emptyIcon}>
                 ⌕
@@ -447,7 +433,7 @@ const styles = StyleSheet.create({
   },
 
   back: {
-    fontSize: 28,
+    fontSize: 30,
     color: "#0F172A",
   },
 
@@ -584,12 +570,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     color: "#64748B",
-  },
-
-  coordinates: {
-    marginTop: 4,
-    fontSize: 10,
-    color: "#94A3B8",
   },
 
   empty: {

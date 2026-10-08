@@ -79,7 +79,7 @@ export default function RideResultsScreen() {
   };
 
   const renderRide = ({ item }: { item: Ride }) => {
-    const score = item.matchScore ?? 0;
+    const score = item.totalScore ?? 0;
 
     return (
       <TouchableOpacity
