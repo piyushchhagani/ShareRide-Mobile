@@ -12,7 +12,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 
 import { getRide, Ride } from "@/services/rides/ride.service";
-import { requestRide } from "@/services/rides/request.service";
+import {
+  requestRide,
+  getMyRequests,
+  RideRequest,
+} from "@/services/rides/request.service";
 import { goBackSafely } from "@/utils/navigation";
 
 export default function RideDetailsScreen() {
@@ -23,6 +27,8 @@ export default function RideDetailsScreen() {
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
+  const [existingRequest, setExistingRequest] =
+    useState<RideRequest | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -37,12 +43,28 @@ export default function RideDetailsScreen() {
     }
 
     try {
-      const result = await getRide(Number(rideId));
+      setLoading(true);
+      setError("");
 
+      const result = await getRide(Number(rideId));
       setRide(result);
+
+      try {
+        const requests = await getMyRequests();
+
+        const request = requests.find(
+          (item) => item.rideId === result.id
+        );
+
+        setExistingRequest(request ?? null);
+      } catch (requestError) {
+        console.log(
+          "Unable to check existing request:",
+          requestError
+        );
+      }
     } catch (error) {
       console.error("GET RIDE ERROR:", error);
-
       setError("Unable to load this ride.");
     } finally {
       setLoading(false);
@@ -50,12 +72,24 @@ export default function RideDetailsScreen() {
   };
 
   const handleRequest = async () => {
-    if (!ride) return;
+    if (!ride || requesting || existingRequest) {
+      return;
+    }
+
+    if (ride.availableSeats <= 0) {
+      Alert.alert(
+        "Ride full",
+        "There are no available seats on this ride."
+      );
+      return;
+    }
 
     try {
       setRequesting(true);
 
-      await requestRide(ride.id, 1);
+      const result = await requestRide(ride.id, 1);
+
+      setExistingRequest(result);
 
       Alert.alert(
         "Request sent 🎉",
@@ -63,8 +97,11 @@ export default function RideDetailsScreen() {
         [
           {
             text: "View bookings",
-            onPress: () =>
-              router.replace("/my-bookings"),
+            onPress: () => router.replace("/my-bookings"),
+          },
+          {
+            text: "Done",
+            style: "cancel",
           },
         ]
       );
@@ -74,11 +111,13 @@ export default function RideDetailsScreen() {
         error?.response?.data || error
       );
 
-      Alert.alert(
-        "Request failed",
-        error?.response?.data?.message ||
-          "Unable to request this ride."
-      );
+      const message =
+        typeof error?.response?.data === "string"
+          ? error.response.data
+          : error?.response?.data?.message ||
+            "Unable to request this ride.";
+
+      Alert.alert("Request failed", message);
     } finally {
       setRequesting(false);
     }
@@ -107,7 +146,6 @@ export default function RideDetailsScreen() {
             size="large"
             color="#2563EB"
           />
-
           <Text style={styles.loadingText}>
             Loading ride...
           </Text>
@@ -143,7 +181,16 @@ export default function RideDetailsScreen() {
     );
   }
 
-  const score = ride.totalScore ?? 0;
+  const score = ride.matchScore ?? 0;
+
+  const requestAccepted =
+    existingRequest?.status === "ACCEPTED";
+
+  const requestPending =
+    existingRequest?.status === "PENDING";
+
+  const requestRejected =
+    existingRequest?.status === "REJECTED";
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -178,8 +225,7 @@ export default function RideDetailsScreen() {
             </Text>
 
             <Text style={styles.driverVehicle}>
-              {ride.vehicleType ||
-                "Student vehicle"}
+              {ride.vehicleType || "Student vehicle"}
             </Text>
 
             {ride.vehicleNumber && (
@@ -238,7 +284,7 @@ export default function RideDetailsScreen() {
           </View>
         </View>
 
-        {/* TIME */}
+        {/* DEPARTURE */}
 
         <Text style={styles.sectionTitle}>
           Departure
@@ -278,29 +324,102 @@ export default function RideDetailsScreen() {
           </View>
         </View>
 
-        {/* REQUEST */}
+        {/* REQUEST STATUS */}
 
-        <TouchableOpacity
-          disabled={
-            requesting ||
-            ride.availableSeats <= 0
-          }
-          activeOpacity={0.85}
-          style={[
-            styles.requestButton,
-            ride.availableSeats <= 0 &&
-              styles.disabledButton,
-          ]}
-          onPress={handleRequest}
-        >
-          {requesting ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.requestText}>
-              Request this ride
+        {existingRequest && (
+          <View
+            style={[
+              styles.statusCard,
+              requestAccepted &&
+                styles.acceptedCard,
+              requestPending &&
+                styles.pendingCard,
+              requestRejected &&
+                styles.rejectedCard,
+            ]}
+          >
+            <Text style={styles.statusIcon}>
+              {requestAccepted
+                ? "✓"
+                : requestPending
+                  ? "⏳"
+                  : "!"
+              }
             </Text>
-          )}
-        </TouchableOpacity>
+
+            <View style={styles.statusInfo}>
+              <Text style={styles.statusTitle}>
+                {requestAccepted
+                  ? "Ride accepted"
+                  : requestPending
+                    ? "Request pending"
+                    : "Request rejected"}
+              </Text>
+
+              <Text style={styles.statusText}>
+                {requestAccepted
+                  ? "The driver accepted your request."
+                  : requestPending
+                    ? "Waiting for the driver to respond."
+                    : "The driver rejected your request."}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* REQUEST BUTTON */}
+
+        {!existingRequest && (
+          <TouchableOpacity
+            disabled={
+              requesting ||
+              ride.availableSeats <= 0
+            }
+            activeOpacity={0.85}
+            style={[
+              styles.requestButton,
+              ride.availableSeats <= 0 &&
+                styles.disabledButton,
+            ]}
+            onPress={handleRequest}
+          >
+            {requesting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.requestText}>
+                {ride.availableSeats <= 0
+                  ? "Ride full"
+                  : "Request this ride"}
+              </Text>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {requestPending && (
+          <TouchableOpacity
+            style={styles.bookingButton}
+            onPress={() =>
+              router.push("/my-bookings")
+            }
+          >
+            <Text style={styles.bookingText}>
+              View my bookings
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {requestAccepted && (
+          <TouchableOpacity
+            style={styles.bookingButton}
+            onPress={() =>
+              router.push("/my-bookings")
+            }
+          >
+            <Text style={styles.bookingText}>
+              View booking
+            </Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -486,6 +605,50 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
 
+  statusCard: {
+    marginTop: 14,
+    borderRadius: 20,
+    padding: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+  },
+
+  acceptedCard: {
+    backgroundColor: "#ECFDF5",
+  },
+
+  pendingCard: {
+    backgroundColor: "#FFFBEB",
+  },
+
+  rejectedCard: {
+    backgroundColor: "#FEF2F2",
+  },
+
+  statusIcon: {
+    fontSize: 24,
+    width: 42,
+    textAlign: "center",
+  },
+
+  statusInfo: {
+    flex: 1,
+    marginLeft: 10,
+  },
+
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111827",
+  },
+
+  statusText: {
+    marginTop: 3,
+    fontSize: 13,
+    color: "#64748B",
+  },
+
   requestButton: {
     height: 62,
     marginTop: 25,
@@ -498,6 +661,23 @@ const styles = StyleSheet.create({
   requestText: {
     color: "#FFFFFF",
     fontSize: 18,
+    fontWeight: "800",
+  },
+
+  bookingButton: {
+    height: 58,
+    marginTop: 15,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#2563EB",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  bookingText: {
+    color: "#2563EB",
+    fontSize: 16,
     fontWeight: "800",
   },
 

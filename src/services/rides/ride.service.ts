@@ -50,10 +50,12 @@ export type Ride = {
 
   status: string;
 
-  totalScore?: number;
+  matchScore?: number;
+  routeScore?: number;
   timeScore?: number;
   pickupScore?: number;
   destinationScore?: number;
+  detourScore?: number;
 };
 
 export async function createRide(

@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import {
   Modal,
   ScrollView,
@@ -7,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 
@@ -14,7 +16,31 @@ import LocationSelector from "@/components/location/LocationSelector";
 import { useRideStore } from "@/store/ride.store";
 import { goBackSafely } from "@/utils/navigation";
 
-function formatDate(date: Date) {
+/**
+ * Converts a Date into a local date-time string.
+ *
+ * IMPORTANT:
+ * Do not use toISOString() here.
+ *
+ * Example:
+ * 5:00 PM local time
+ * -> 2026-10-08T17:00:00
+ */
+function formatLocalDateTime(date: Date): string {
+  const pad = (value: number) =>
+    value.toString().padStart(2, "0");
+
+  return [
+    `${date.getFullYear()}-${pad(
+      date.getMonth() + 1
+    )}-${pad(date.getDate())}`,
+    `${pad(date.getHours())}:${pad(
+      date.getMinutes()
+    )}:00`,
+  ].join("T");
+}
+
+function formatDate(date: Date): string {
   return date.toLocaleString([], {
     weekday: "short",
     day: "numeric",
@@ -22,7 +48,7 @@ function formatDate(date: Date) {
   });
 }
 
-function formatTime(date: Date) {
+function formatTime(date: Date): string {
   return date.toLocaleString([], {
     hour: "numeric",
     minute: "2-digit",
@@ -30,28 +56,39 @@ function formatTime(date: Date) {
 }
 
 export default function FindRideScreen() {
-  const { pickup, destination } = useRideStore();
+  const { pickup, destination } =
+    useRideStore();
 
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const date = new Date();
+  const [selectedDate, setSelectedDate] =
+    useState(() => {
+      const date = new Date();
 
-    date.setMinutes(0);
-    date.setSeconds(0);
-    date.setMilliseconds(0);
+      date.setMinutes(0);
+      date.setSeconds(0);
+      date.setMilliseconds(0);
 
-    date.setHours(date.getHours() + 1);
+      date.setHours(
+        date.getHours() + 1
+      );
 
-    return date;
-  });
+      return date;
+    });
 
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [seats, setSeats] = useState(1);
+  const [showTimePicker, setShowTimePicker] =
+    useState(false);
 
-  const canContinue = !!pickup && !!destination;
+  const [seats, setSeats] =
+    useState(1);
 
-  const changeTime = (hours: number) => {
-    const next = new Date(selectedDate);
-    next.setHours(hours);
+  const canContinue =
+    !!pickup && !!destination;
+
+  const changeTime = (hour: number) => {
+    const next = new Date(
+      selectedDate
+    );
+
+    next.setHours(hour);
     next.setMinutes(0);
     next.setSeconds(0);
     next.setMilliseconds(0);
@@ -65,32 +102,64 @@ export default function FindRideScreen() {
       return;
     }
 
+    const departureTime =
+      formatLocalDateTime(
+        selectedDate
+      );
+
+    console.log(
+      "FIND RIDE:",
+      {
+        pickup,
+        destination,
+        selectedDate:
+          selectedDate.toString(),
+        departureTime,
+        seats,
+      }
+    );
+
     router.push({
-      pathname: "/ride-results",
+      pathname: "/ride/results",
       params: {
-        departureTime: selectedDate.toISOString(),
+        departureTime,
         seats: seats.toString(),
       },
     });
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView
+      style={styles.safeArea}
+    >
       <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={
+          false
+        }
+        contentContainerStyle={
+          styles.content
+        }
       >
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => goBackSafely()}
+          onPress={() =>
+            goBackSafely()
+          }
         >
-          <Text style={styles.backText}>‹ Back</Text>
+          <Text
+            style={styles.backText}
+          >
+            ‹ Back
+          </Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>Find a ride</Text>
+        <Text style={styles.title}>
+          Find a ride
+        </Text>
 
         <Text style={styles.subtitle}>
-          Find students travelling your way.
+          Find students travelling your
+          way.
         </Text>
 
         <LocationSelector />
@@ -98,50 +167,113 @@ export default function FindRideScreen() {
         <TouchableOpacity
           activeOpacity={0.85}
           style={styles.timeCard}
-          onPress={() => setShowTimePicker(true)}
+          onPress={() =>
+            setShowTimePicker(true)
+          }
         >
           <View style={styles.timeIcon}>
-            <Text style={styles.timeIconText}>◷</Text>
-          </View>
-
-          <View style={styles.timeContent}>
-            <Text style={styles.timeLabel}>When</Text>
-
-            <Text style={styles.timeValue}>
-              {formatDate(selectedDate)}, {formatTime(selectedDate)}
+            <Text
+              style={styles.timeIconText}
+            >
+              ◷
             </Text>
           </View>
 
-          <Text style={styles.arrow}>›</Text>
+          <View
+            style={styles.timeContent}
+          >
+            <Text
+              style={styles.timeLabel}
+            >
+              When
+            </Text>
+
+            <Text
+              style={styles.timeValue}
+            >
+              {formatDate(
+                selectedDate
+              )}
+              {", "}
+              {formatTime(
+                selectedDate
+              )}
+            </Text>
+          </View>
+
+          <Text style={styles.arrow}>
+            ›
+          </Text>
         </TouchableOpacity>
 
-        <Text style={styles.sectionTitle}>Preferences</Text>
+        <Text
+          style={styles.sectionTitle}
+        >
+          Preferences
+        </Text>
 
-        <View style={styles.preferenceRow}>
-          <View style={styles.preferenceCard}>
-            <Text style={styles.preferenceIcon}>👥</Text>
+        <View
+          style={styles.preferenceRow}
+        >
+          <View
+            style={styles.preferenceCard}
+          >
+            <Text
+              style={styles.preferenceIcon}
+            >
+              👥
+            </Text>
 
-            <Text style={styles.preferenceTitle}>Any rider</Text>
+            <Text
+              style={styles.preferenceTitle}
+            >
+              Any rider
+            </Text>
 
-            <Text style={styles.preferenceSubtitle}>
+            <Text
+              style={
+                styles.preferenceSubtitle
+              }
+            >
               Student community
             </Text>
           </View>
 
           <TouchableOpacity
+            activeOpacity={0.8}
             style={[
               styles.preferenceCard,
-              seats === 2 && styles.preferenceCardActive,
+              seats === 2 &&
+                styles.preferenceCardActive,
             ]}
-            onPress={() => setSeats(seats === 1 ? 2 : 1)}
+            onPress={() =>
+              setSeats(
+                seats === 1
+                  ? 2
+                  : 1
+              )
+            }
           >
-            <Text style={styles.preferenceIcon}>💺</Text>
-
-            <Text style={styles.preferenceTitle}>
-              {seats} {seats === 1 ? "seat" : "seats"}
+            <Text
+              style={styles.preferenceIcon}
+            >
+              💺
             </Text>
 
-            <Text style={styles.preferenceSubtitle}>
+            <Text
+              style={styles.preferenceTitle}
+            >
+              {seats}{" "}
+              {seats === 1
+                ? "seat"
+                : "seats"}
+            </Text>
+
+            <Text
+              style={
+                styles.preferenceSubtitle
+              }
+            >
               Tap to change
             </Text>
           </TouchableOpacity>
@@ -152,11 +284,18 @@ export default function FindRideScreen() {
           activeOpacity={0.85}
           style={[
             styles.findButton,
-            !canContinue && styles.findButtonDisabled,
+            !canContinue &&
+              styles.findButtonDisabled,
           ]}
-          onPress={handleFindMatches}
+          onPress={
+            handleFindMatches
+          }
         >
-          <Text style={styles.findButtonText}>Find Matches</Text>
+          <Text
+            style={styles.findButtonText}
+          >
+            Find Matches
+          </Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -164,55 +303,100 @@ export default function FindRideScreen() {
         visible={showTimePicker}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowTimePicker(false)}
+        onRequestClose={() =>
+          setShowTimePicker(false)
+        }
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.timeModal}>
-            <View style={styles.modalHandle} />
+        <View
+          style={styles.modalOverlay}
+        >
+          <View
+            style={styles.timeModal}
+          >
+            <View
+              style={styles.modalHandle}
+            />
 
-            <Text style={styles.modalTitle}>Choose departure time</Text>
-
-            <Text style={styles.modalSubtitle}>
-              {formatDate(selectedDate)}
+            <Text
+              style={styles.modalTitle}
+            >
+              Choose departure time
             </Text>
 
-            <View style={styles.timeGrid}>
-              {[7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
-                .map((hour) => {
-                  const displayHour =
-                    hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+            <Text
+              style={styles.modalSubtitle}
+            >
+              {formatDate(
+                selectedDate
+              )}
+            </Text>
 
-                  const suffix = hour >= 12 ? "PM" : "AM";
+            <View
+              style={styles.timeGrid}
+            >
+              {[
+                7, 8, 9, 10,
+                11, 12, 13, 14,
+                15, 16, 17, 18,
+                19, 20, 21, 22,
+              ].map((hour) => {
+                const displayHour =
+                  hour > 12
+                    ? hour - 12
+                    : hour === 0
+                      ? 12
+                      : hour;
 
-                  const active = selectedDate.getHours() === hour;
+                const suffix =
+                  hour >= 12
+                    ? "PM"
+                    : "AM";
 
-                  return (
-                    <TouchableOpacity
-                      key={hour}
+                const active =
+                  selectedDate.getHours() ===
+                  hour;
+
+                return (
+                  <TouchableOpacity
+                    key={hour}
+                    activeOpacity={0.8}
+                    style={[
+                      styles.timeOption,
+                      active &&
+                        styles.timeOptionActive,
+                    ]}
+                    onPress={() =>
+                      changeTime(hour)
+                    }
+                  >
+                    <Text
                       style={[
-                        styles.timeOption,
-                        active && styles.timeOptionActive,
+                        styles.timeOptionText,
+                        active &&
+                          styles.timeOptionTextActive,
                       ]}
-                      onPress={() => changeTime(hour)}
                     >
-                      <Text
-                        style={[
-                          styles.timeOptionText,
-                          active && styles.timeOptionTextActive,
-                        ]}
-                      >
-                        {displayHour}:00 {suffix}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                      {displayHour}:00{" "}
+                      {suffix}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             <TouchableOpacity
               style={styles.cancelButton}
-              onPress={() => setShowTimePicker(false)}
+              onPress={() =>
+                setShowTimePicker(
+                  false
+                )
+              }
             >
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text
+                style={styles.cancelText}
+              >
+                Cancel
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -263,10 +447,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 24,
+
     shadowColor: "#000",
     shadowOpacity: 0.04,
     shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+
     elevation: 2,
   },
 
@@ -371,7 +560,8 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    backgroundColor:
+      "rgba(15, 23, 42, 0.45)",
   },
 
   timeModal: {

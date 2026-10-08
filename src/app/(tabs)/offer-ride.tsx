@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import {
   ActivityIndicator,
   Alert,
@@ -11,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import DateTimePicker from "@expo/ui/community/datetime-picker";
@@ -20,23 +22,54 @@ import { useRideStore } from "@/store/ride.store";
 import { createRide } from "@/services/rides/ride.service";
 import { goBackSafely } from "@/utils/navigation";
 
+/**
+ * Converts the selected device-local Date into a local
+ * date-time string without converting it to UTC.
+ *
+ * Example:
+ * 5:00 PM IST
+ * -> 2026-10-08T17:00:00
+ */
+function formatLocalDateTime(date: Date): string {
+  const pad = (value: number) =>
+    value.toString().padStart(2, "0");
+
+  return [
+    `${date.getFullYear()}-${pad(
+      date.getMonth() + 1
+    )}-${pad(date.getDate())}`,
+    `${pad(date.getHours())}:${pad(
+      date.getMinutes()
+    )}:00`,
+  ].join("T");
+}
+
+function formatDisplayDateTime(date: Date): string {
+  return date.toLocaleString([], {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export default function OfferRideScreen() {
   const { pickup, destination } = useRideStore();
 
-  const [selectedDate, setSelectedDate] =
-    useState(() => {
-      const date = new Date();
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const date = new Date();
 
-      date.setMinutes(0);
-      date.setSeconds(0);
-      date.setMilliseconds(0);
-      date.setHours(date.getHours() + 1);
+    date.setMinutes(0);
+    date.setSeconds(0);
+    date.setMilliseconds(0);
 
-      return date;
-    });
+    date.setHours(date.getHours() + 1);
 
-  const [showPicker, setShowPicker] =
-    useState(false);
+    return date;
+  });
+
+  const [showPicker, setShowPicker] = useState(false);
 
   const [seats, setSeats] = useState(1);
 
@@ -46,8 +79,7 @@ export default function OfferRideScreen() {
   const [vehicleNumber, setVehicleNumber] =
     useState("");
 
-  const [loading, setLoading] =
-    useState(false);
+  const [loading, setLoading] = useState(false);
 
   const canPublish =
     !!pickup &&
@@ -57,13 +89,7 @@ export default function OfferRideScreen() {
     seats > 0;
 
   const formattedDate =
-    selectedDate.toLocaleString([], {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    formatDisplayDateTime(selectedDate);
 
   const publishRide = async () => {
     if (
@@ -74,6 +100,19 @@ export default function OfferRideScreen() {
     ) {
       return;
     }
+
+    const departureTime =
+      formatLocalDateTime(selectedDate);
+
+    console.log("CREATE RIDE:", {
+      pickup: pickup.address,
+      destination: destination.address,
+      selectedDate: selectedDate.toString(),
+      departureTime,
+      seats,
+      vehicleType,
+      vehicleNumber,
+    });
 
     try {
       setLoading(true);
@@ -90,8 +129,9 @@ export default function OfferRideScreen() {
         destinationLongitude:
           destination.longitude,
 
-        departureTime:
-          selectedDate.toISOString(),
+        // IMPORTANT:
+        // Send local time, NOT toISOString().
+        departureTime,
 
         availableSeats: seats,
 
@@ -225,6 +265,7 @@ export default function OfferRideScreen() {
                     setSelectedDate(
                       date
                     );
+
                     setShowPicker(
                       false
                     );

@@ -79,7 +79,23 @@ export default function RideResultsScreen() {
   };
 
   const renderRide = ({ item }: { item: Ride }) => {
-    const score = item.totalScore ?? 0;
+    const score =
+      (item as Partial<{
+        totalScore?: number;
+        matchScore?: number;
+        score?: number;
+      }>).totalScore ??
+      (item as Partial<{
+        totalScore?: number;
+        matchScore?: number;
+        score?: number;
+      }>).matchScore ??
+      (item as Partial<{
+        totalScore?: number;
+        matchScore?: number;
+        score?: number;
+      }>).score ??
+      0;
 
     return (
       <TouchableOpacity
