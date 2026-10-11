@@ -10,12 +10,19 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use(async (config) => {
-  const token = await SecureStore.getItemAsync(
-    "shareride_auth_token"
-  );
+  const token = await SecureStore.getItemAsync("shareride_auth_token");
+
+  console.log("========== API REQUEST ==========");
+  console.log("METHOD:", config.method?.toUpperCase());
+  console.log("URL:", `${config.baseURL}${config.url}`);
+  console.log("TOKEN EXISTS:", !!token);
 
   if (token) {
+    config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
+    console.log("AUTH HEADER ATTACHED: YES");
+  } else {
+    console.log("AUTH HEADER ATTACHED: NO");
   }
 
   return config;
