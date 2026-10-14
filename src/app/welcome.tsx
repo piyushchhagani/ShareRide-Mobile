@@ -11,7 +11,7 @@ export default function WelcomeScreen() {
           <View style={styles.sun} />
           <View style={styles.road} />
           <View style={styles.car}><View style={styles.window} /><View style={styles.wheelOne} /><View style={styles.wheelTwo} /></View>
-          <View style={styles.pin}><Text style={styles.pinText}>></Text></View>
+          <View style={styles.pin}><Text style={styles.pinText}>{"›"}</Text></View>
           <View style={styles.floating}><Text style={styles.floatingTitle}>Same way?</Text><Text style={styles.floatingSub}>Make the trip together.</Text></View>
         </View>
         <View style={styles.copy}>
@@ -20,7 +20,7 @@ export default function WelcomeScreen() {
           <Text style={styles.description}>Share everyday journeys with your campus community. Find a seat or offer one.</Text>
         </View>
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.primary} onPress={() => router.push("/auth/register")}><Text style={styles.primaryText}>Get started <Text style={styles.arrow}>></Text></Text></TouchableOpacity>
+          <TouchableOpacity style={styles.primary} onPress={() => router.push("/auth/register")}><Text style={styles.primaryText}>Get started <Text style={styles.arrow}>{"›"}</Text></Text></TouchableOpacity>
           <TouchableOpacity style={styles.secondary} onPress={() => router.push("/auth/login")}><Text style={styles.secondaryText}>I already have an account</Text></TouchableOpacity>
         </View>
       </View>
