@@ -18,6 +18,8 @@ import { router } from "expo-router";
 import DateTimePicker from "@expo/ui/community/datetime-picker";
 
 import LocationSelector from "@/components/location/LocationSelector";
+import FrequentPlaces from "@/components/location/FrequentPlaces";
+import LocationMap from "@/components/maps/LocationMap";
 import { useRideStore } from "@/store/ride.store";
 import { createRide } from "@/services/rides/ride.service";
 import { goBackSafely } from "@/utils/navigation";
@@ -143,7 +145,7 @@ export default function OfferRideScreen() {
       });
 
       Alert.alert(
-        "Ride published 🎉",
+        "Ride published!",
         "Your ride is now available to students.",
         [
           {
@@ -204,7 +206,7 @@ export default function OfferRideScreen() {
             }
           >
             <Text style={styles.back}>
-              ‹ Back
+              Back
             </Text>
           </TouchableOpacity>
 
@@ -221,6 +223,19 @@ export default function OfferRideScreen() {
 
           <LocationSelector />
 
+        <FrequentPlaces type="pickup" />
+        <FrequentPlaces type="destination" />
+
+          {pickup && destination && (
+            <View style={styles.mapPreview}>
+              <LocationMap
+                pickup={pickup}
+                destination={destination}
+                showCurrentLocation
+              />
+            </View>
+          )}
+
           <TouchableOpacity
             style={styles.card}
             activeOpacity={0.8}
@@ -229,7 +244,7 @@ export default function OfferRideScreen() {
             }
           >
             <Text style={styles.calendar}>
-              ◷
+              Time
             </Text>
 
             <View style={styles.field}>
@@ -243,7 +258,7 @@ export default function OfferRideScreen() {
             </View>
 
             <Text style={styles.arrow}>
-              ›
+              Next
             </Text>
           </TouchableOpacity>
 
@@ -302,7 +317,7 @@ export default function OfferRideScreen() {
                     styles.seatButtonText
                   }
                 >
-                  −
+                  âˆ’
                 </Text>
               </TouchableOpacity>
 
@@ -424,6 +439,13 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     paddingBottom: 30,
+  },
+
+  mapPreview: {
+    height: 240,
+    marginBottom: 18,
+    borderRadius: 20,
+    overflow: "hidden",
   },
 
   back: {

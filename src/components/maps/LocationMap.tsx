@@ -1,18 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
+/* eslint-disable react-hooks/immutability, react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   StyleSheet,
   Text,
   View,
+  Platform,
 } from "react-native";
-import MapView, {
-  Marker,
-  Polyline,
-  Region,
-} from "react-native-maps";
 import * as Location from "expo-location";
+import type { Region } from "react-native-maps";
 
 import { calculateRoute } from "@/services/routes/route.service";
+
+
+const nativeMaps =
+  Platform.OS === "web"
+    ? null
+    : require("react-native-maps");
+const NativeMapView = nativeMaps?.default;
+const NativeMarker = nativeMaps?.Marker;
+const NativePolyline = nativeMaps?.Polyline;
 
 type LocationPoint = {
   address?: string;
@@ -31,6 +38,7 @@ export default function LocationMap({
   destination,
   showCurrentLocation = true,
 }: LocationMapProps) {
+  const mapRef = useRef<any>(null);
   const [currentLocation, setCurrentLocation] =
     useState<LocationPoint | null>(null);
 
@@ -111,7 +119,24 @@ export default function LocationMap({
         destinationLongitude: destination.longitude,
       });
 
-      setRouteCoordinates(response.coordinates);
+      const coordinates = response.coordinates
+        .filter(
+          (coordinate) =>
+            Array.isArray(coordinate) &&
+            coordinate.length >= 2 &&
+            Number.isFinite(Number(coordinate[0])) &&
+            Number.isFinite(Number(coordinate[1]))
+        )
+        .map((coordinate) => [
+          Number(coordinate[0]),
+          Number(coordinate[1]),
+        ]);
+
+      if (coordinates.length < 2) {
+        throw new Error("Route response contained no usable coordinates");
+      }
+
+      setRouteCoordinates(coordinates);
     } catch (routeError) {
       console.error(
         "ROUTE CALCULATION ERROR:",
@@ -174,6 +199,39 @@ export default function LocationMap({
     showCurrentLocation,
   ]);
 
+  useEffect(() => {
+    const points = [
+      pickup,
+      destination,
+      showCurrentLocation ? currentLocation : null,
+    ].filter(
+      (point): point is LocationPoint =>
+        !!point &&
+        Number.isFinite(point.latitude) &&
+        Number.isFinite(point.longitude)
+    );
+
+    if (points.length === 0) {
+      return;
+    }
+
+    mapRef.current?.fitToCoordinates(
+      points.map((point) => ({
+        latitude: point.latitude,
+        longitude: point.longitude,
+      })),
+      {
+        edgePadding: {
+          top: 70,
+          right: 45,
+          bottom: 70,
+          left: 45,
+        },
+        animated: true,
+      }
+    );
+  }, [pickup, destination, currentLocation, showCurrentLocation]);
+
   if (loading && !region) {
     return (
       <View style={styles.center}>
@@ -199,9 +257,20 @@ export default function LocationMap({
     );
   }
 
+  if (Platform.OS === "web") {
+    return (
+      <View style={styles.webFallback}>
+        <Text style={styles.error}>
+          Interactive maps are available in the Android and iOS app.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <MapView
+      <NativeMapView
+        ref={mapRef}
         style={styles.map}
         initialRegion={region}
         showsUserLocation={
@@ -212,7 +281,7 @@ export default function LocationMap({
         }
       >
         {pickup && (
-          <Marker
+          <NativeMarker
             coordinate={{
               latitude: pickup.latitude,
               longitude: pickup.longitude,
@@ -223,11 +292,11 @@ export default function LocationMap({
             <View style={styles.pickupMarker}>
               <View style={styles.pickupDot} />
             </View>
-          </Marker>
+          </NativeMarker>
         )}
 
         {destination && (
-          <Marker
+          <NativeMarker
             coordinate={{
               latitude: destination.latitude,
               longitude: destination.longitude,
@@ -244,12 +313,12 @@ export default function LocationMap({
                 style={styles.destinationDot}
               />
             </View>
-          </Marker>
+          </NativeMarker>
         )}
 
         {currentLocation &&
           showCurrentLocation && (
-            <Marker
+            <NativeMarker
               coordinate={{
                 latitude:
                   currentLocation.latitude,
@@ -261,7 +330,7 @@ export default function LocationMap({
           )}
 
         {routeCoordinates.length > 1 && (
-          <Polyline
+          <NativePolyline
             coordinates={routeCoordinates.map(
               ([longitude, latitude]) => ({
                 latitude,
@@ -272,7 +341,7 @@ export default function LocationMap({
             strokeColor="#2563EB"
           />
         )}
-      </MapView>
+      </NativeMapView>
 
       {routeLoading && (
         <View style={styles.routeBadge}>
@@ -314,6 +383,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#F8FAFC",
+    padding: 24,
+  },
+
+  webFallback: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E0ECFF",
     padding: 24,
   },
 

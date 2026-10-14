@@ -13,7 +13,10 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 
-import { register } from "@/services/auth/auth.service";
+import {
+  login,
+  register,
+} from "@/services/auth/auth.service";
 import { useAuthStore } from "@/store/auth.store";
 import { UserRole } from "@/types/auth";
 
@@ -37,21 +40,34 @@ export default function RegisterScreen() {
     try {
       setIsLoading(true);
 
-      const response = (await register({
+      await register({
         name: fullName.trim(),
         email: email.trim(),
         password,
-      })) as any;
+      });
 
-      setSession(response?.token, response?.user);
+      const response = await login({
+        email: email.trim(),
+        password,
+      });
 
-      router.replace("/home");
+      setSession(response.token, {
+        id: response.id,
+        name: response.name,
+        email: response.email,
+        role: response.role,
+      });
+
+      router.replace("/(tabs)/home");
     } catch (error: any) {
       const message =
-        error?.response?.data?.message ||
-        "Unable to create your account.";
+        typeof error?.response?.data === "string"
+          ? error.response.data
+          : error?.response?.data?.message ||
+            error?.message ||
+            "Unable to create your account.";
 
-      Alert.alert("Registration failed", message);
+      Alert.alert("Registration failed", String(message));
     } finally {
       setIsLoading(false);
     }

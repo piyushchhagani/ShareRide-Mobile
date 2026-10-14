@@ -13,6 +13,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 
 import LocationSelector from "@/components/location/LocationSelector";
+import FrequentPlaces from "@/components/location/FrequentPlaces";
+import LocationMap from "@/components/maps/LocationMap";
 import { useRideStore } from "@/store/ride.store";
 import { goBackSafely } from "@/utils/navigation";
 
@@ -146,11 +148,7 @@ export default function FindRideScreen() {
             goBackSafely()
           }
         >
-          <Text
-            style={styles.backText}
-          >
-            ‹ Back
-          </Text>
+          <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
 
         <Text style={styles.title}>
@@ -164,6 +162,19 @@ export default function FindRideScreen() {
 
         <LocationSelector />
 
+        <FrequentPlaces type="pickup" />
+        <FrequentPlaces type="destination" />
+
+        {pickup && destination && (
+          <View style={styles.mapPreview}>
+            <LocationMap
+              pickup={pickup}
+              destination={destination}
+              showCurrentLocation
+            />
+          </View>
+        )}
+
         <TouchableOpacity
           activeOpacity={0.85}
           style={styles.timeCard}
@@ -172,11 +183,7 @@ export default function FindRideScreen() {
           }
         >
           <View style={styles.timeIcon}>
-            <Text
-              style={styles.timeIconText}
-            >
-              ◷
-            </Text>
+            <Text style={styles.timeIconText}>Time</Text>
           </View>
 
           <View
@@ -202,7 +209,7 @@ export default function FindRideScreen() {
           </View>
 
           <Text style={styles.arrow}>
-            ›
+            Next
           </Text>
         </TouchableOpacity>
 
@@ -218,11 +225,7 @@ export default function FindRideScreen() {
           <View
             style={styles.preferenceCard}
           >
-            <Text
-              style={styles.preferenceIcon}
-            >
-              👥
-            </Text>
+            <Text style={styles.preferenceIcon}>Rider</Text>
 
             <Text
               style={styles.preferenceTitle}
@@ -254,11 +257,7 @@ export default function FindRideScreen() {
               )
             }
           >
-            <Text
-              style={styles.preferenceIcon}
-            >
-              💺
-            </Text>
+            <Text style={styles.preferenceIcon}>Rider</Text>
 
             <Text
               style={styles.preferenceTitle}
@@ -414,6 +413,13 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     paddingBottom: 40,
+  },
+
+  mapPreview: {
+    height: 240,
+    marginTop: 18,
+    borderRadius: 20,
+    overflow: "hidden",
   },
 
   backButton: {

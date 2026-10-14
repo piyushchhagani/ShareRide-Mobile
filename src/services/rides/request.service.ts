@@ -1,4 +1,5 @@
 import { api } from "@/services/api/client";
+import { ENDPOINTS } from "@/services/api/endpoints";
 
 export type RideRequest = {
   id: number;
@@ -29,7 +30,7 @@ export async function requestRide(
 ): Promise<RideRequest> {
   const { data } =
     await api.post<RideRequest>(
-      "/api/ride-requests",
+      ENDPOINTS.RIDE_REQUESTS.BASE,
       {
         rideId,
         seats,
@@ -47,7 +48,7 @@ export async function getMyRequests(): Promise<
 > {
   const { data } =
     await api.get<RideRequest[]>(
-      "/api/ride-requests/mine"
+      ENDPOINTS.RIDE_REQUESTS.MINE
     );
 
   return data;
@@ -62,7 +63,7 @@ export async function getRideRequests(
 ): Promise<RideRequest[]> {
   const { data } =
     await api.get<RideRequest[]>(
-      `/api/ride-requests/ride/${rideId}`
+      ENDPOINTS.RIDE_REQUESTS.BY_RIDE(rideId)
     );
 
   return data;
@@ -84,7 +85,7 @@ export async function updateRideRequest(
   try {
     const { data } =
       await api.patch<RideRequest>(
-        `/api/ride-requests/${requestId}`,
+        ENDPOINTS.RIDE_REQUESTS.BY_ID(requestId),
         {
           action,
         }
@@ -114,4 +115,4 @@ export async function updateRideRequest(
 
     throw error;
   }
-}
+}

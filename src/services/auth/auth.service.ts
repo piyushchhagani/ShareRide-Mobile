@@ -1,6 +1,10 @@
-import * as SecureStore from "expo-secure-store";
 import { api } from "@/services/api/client";
 import { ENDPOINTS } from "@/services/api/endpoints";
+import {
+  deleteStorageItem,
+  getStorageItem,
+  setStorageItem,
+} from "@/utils/storage";
 
 const TOKEN_KEY = "shareride_auth_token";
 
@@ -48,7 +52,7 @@ export async function login(
       throw new Error("Backend returned no token.");
     }
 
-    await SecureStore.setItemAsync(
+    await setStorageItem(
       TOKEN_KEY,
       response.data.token
     );
@@ -76,14 +80,31 @@ export async function register(
     phone?: string;
   }
 ): Promise<void> {
-  await api.post(
-    ENDPOINTS.AUTH.REGISTER,
-    payload
-  );
+  console.log("========== REGISTER DEBUG ==========");
+  console.log("EMAIL:", payload.email);
+
+  try {
+    await api.post(
+      ENDPOINTS.AUTH.REGISTER,
+      {
+        name: payload.name.trim(),
+        email: payload.email.trim(),
+        password: payload.password,
+        phone: payload.phone?.trim() || undefined,
+      }
+    );
+    console.log("REGISTER SUCCESS");
+  } catch (error: any) {
+    console.log("========== REGISTER ERROR ==========");
+    console.log("STATUS:", error?.response?.status);
+    console.log("DATA:", error?.response?.data);
+    console.log("MESSAGE:", error?.message);
+    throw error;
+  }
 }
 
 export async function getStoredToken() {
-  return SecureStore.getItemAsync(TOKEN_KEY);
+  return getStorageItem(TOKEN_KEY);
 }
 
 export async function getCurrentUser(): Promise<User> {
@@ -95,5 +116,5 @@ export async function getCurrentUser(): Promise<User> {
 }
 
 export async function logout(): Promise<void> {
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
-}
+  await deleteStorageItem(TOKEN_KEY);
+}

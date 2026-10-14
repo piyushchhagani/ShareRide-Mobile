@@ -93,7 +93,7 @@ export default function RidesScreen() {
         </Text>
 
         <Text style={styles.subtitle}>
-          Rides you've offered
+          Rides you&apos;ve offered
         </Text>
       </View>
 

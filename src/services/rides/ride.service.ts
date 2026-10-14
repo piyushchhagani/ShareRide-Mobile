@@ -1,4 +1,5 @@
 import { api } from "@/services/api/client";
+import { ENDPOINTS } from "@/services/api/endpoints";
 
 export type CreateRidePayload = {
   pickupAddress: string;
@@ -62,7 +63,7 @@ export async function createRide(
   payload: CreateRidePayload
 ): Promise<Ride> {
   const { data } = await api.post<Ride>(
-    "/api/rides",
+    ENDPOINTS.RIDES.BASE,
     payload
   );
 
@@ -71,7 +72,7 @@ export async function createRide(
 
 export async function getAllRides(): Promise<Ride[]> {
   const { data } = await api.get<Ride[]>(
-    "/api/rides"
+    ENDPOINTS.RIDES.BASE
   );
 
   return data;
@@ -79,7 +80,7 @@ export async function getAllRides(): Promise<Ride[]> {
 
 export async function getMyRides(): Promise<Ride[]> {
   const { data } = await api.get<Ride[]>(
-    "/api/rides/mine"
+    ENDPOINTS.RIDES.MINE
   );
 
   return data;
@@ -89,7 +90,7 @@ export async function getRide(
   rideId: number
 ): Promise<Ride> {
   const { data } = await api.get<Ride>(
-    `/api/rides/${rideId}`
+    ENDPOINTS.RIDES.BY_ID(rideId)
   );
 
   return data;
@@ -99,9 +100,21 @@ export async function findRides(
   payload: FindRidePayload
 ): Promise<Ride[]> {
   const { data } = await api.post<Ride[]>(
-    "/api/rides/find",
+    ENDPOINTS.RIDES.FIND,
     payload
   );
 
   return data;
 }
+
+export async function updateRideStatus(
+  rideId: number,
+  status: "ACTIVE" | "COMPLETED" | "CANCELLED"
+): Promise<Ride> {
+  const { data } = await api.patch<Ride>(
+    ENDPOINTS.RIDES.UPDATE_STATUS(rideId),
+    { status }
+  );
+
+  return data;
+}
