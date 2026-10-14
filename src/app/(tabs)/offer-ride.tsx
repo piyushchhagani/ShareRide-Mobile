@@ -18,6 +18,7 @@ import { router } from "expo-router";
 import DateTimePicker from "@expo/ui/community/datetime-picker";
 
 import LocationSelector from "@/components/location/LocationSelector";
+import LocationMap from "@/components/maps/LocationMap";
 import { useRideStore } from "@/store/ride.store";
 import { createRide } from "@/services/rides/ride.service";
 import { goBackSafely } from "@/utils/navigation";
@@ -220,6 +221,16 @@ export default function OfferRideScreen() {
           </View>
 
           <LocationSelector />
+
+          {pickup && destination && (
+            <View style={styles.mapPreview}>
+              <LocationMap
+                pickup={pickup}
+                destination={destination}
+                showCurrentLocation
+              />
+            </View>
+          )}
 
           <TouchableOpacity
             style={styles.card}
@@ -424,6 +435,13 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     paddingBottom: 30,
+  },
+
+  mapPreview: {
+    height: 240,
+    marginBottom: 18,
+    borderRadius: 20,
+    overflow: "hidden",
   },
 
   back: {

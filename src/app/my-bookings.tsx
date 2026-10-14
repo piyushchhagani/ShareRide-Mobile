@@ -115,7 +115,7 @@ export default function MyBookingsScreen() {
         </Text>
 
         <Text style={styles.subtitle}>
-          Rides you've requested
+          Rides you&apos;ve requested
         </Text>
       </View>
 

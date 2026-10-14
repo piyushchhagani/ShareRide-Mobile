@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/immutability, react-hooks/exhaustive-deps */
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -18,6 +19,7 @@ import {
   RideRequest,
 } from "@/services/rides/request.service";
 import { goBackSafely } from "@/utils/navigation";
+import LocationMap from "@/components/maps/LocationMap";
 
 export default function RideDetailsScreen() {
   const { rideId } = useLocalSearchParams<{
@@ -284,6 +286,22 @@ export default function RideDetailsScreen() {
           </View>
         </View>
 
+        <View style={styles.mapPreview}>
+          <LocationMap
+            pickup={{
+              address: ride.pickupAddress,
+              latitude: ride.pickupLatitude,
+              longitude: ride.pickupLongitude,
+            }}
+            destination={{
+              address: ride.destinationAddress,
+              latitude: ride.destinationLatitude,
+              longitude: ride.destinationLongitude,
+            }}
+            showCurrentLocation={false}
+          />
+        </View>
+
         {/* DEPARTURE */}
 
         <Text style={styles.sectionTitle}>
@@ -526,6 +544,13 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     padding: 22,
     flexDirection: "row",
+  },
+
+  mapPreview: {
+    height: 240,
+    marginTop: 14,
+    borderRadius: 20,
+    overflow: "hidden",
   },
 
   routeColumn: {

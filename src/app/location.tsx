@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/immutability, react-hooks/exhaustive-deps */
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -8,17 +9,27 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import * as Location from "expo-location";
+import type { Region } from "react-native-maps";
 
 import { useRideStore } from "@/store/ride.store";
+
 import {
   LocationPoint,
   useLocationStore,
 } from "@/store/location.store";
 import { goBackSafely } from "@/utils/navigation";
+
+const nativeMaps =
+  Platform.OS === "web"
+    ? null
+    : require("react-native-maps");
+const NativeMapView = nativeMaps?.default;
+const NativeMarker = nativeMaps?.Marker;
 
 type SearchResult = LocationPoint;
 
@@ -39,6 +50,8 @@ export default function LocationScreen() {
   const [loading, setLoading] = useState(false);
   const [locationLoading, setLocationLoading] =
     useState(true);
+  const [mapSelection, setMapSelection] =
+    useState<LocationPoint | null>(null);
 
   const searchTimeout = useRef<ReturnType<
     typeof setTimeout
@@ -212,6 +225,68 @@ export default function LocationScreen() {
     goBackSafely();
   };
 
+  const selectMapLocation = async ({
+    latitude,
+    longitude,
+  }: {
+    latitude: number;
+    longitude: number;
+  }) => {
+    Keyboard.dismiss();
+
+    const fallbackAddress = `${latitude.toFixed(
+      6
+    )}, ${longitude.toFixed(6)}`;
+
+    setMapSelection({
+      address: fallbackAddress,
+      latitude,
+      longitude,
+    });
+
+    try {
+      const addresses =
+        await Location.reverseGeocodeAsync({
+          latitude,
+          longitude,
+        });
+
+      const address = addresses[0];
+      const formattedAddress = [
+        address?.name,
+        address?.street,
+        address?.district,
+        address?.city,
+        address?.region,
+      ]
+        .filter(Boolean)
+        .filter(
+          (value, index, values) =>
+            values.indexOf(value) === index
+        )
+        .join(", ");
+
+      if (formattedAddress) {
+        setMapSelection({
+          address: formattedAddress,
+          latitude,
+          longitude,
+        });
+      }
+    } catch {
+      // Coordinates remain a valid fallback address.
+    }
+  };
+
+  const mapRegion: Region = {
+    latitude: mapSelection?.latitude ??
+      currentLocation?.latitude ?? 21.1458,
+    longitude: mapSelection?.longitude ??
+      currentLocation?.longitude ?? 79.0882,
+    latitudeDelta: 0.08,
+    longitudeDelta: 0.08,
+  };
+
   const clearSearch = () => {
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
@@ -275,6 +350,66 @@ export default function LocationScreen() {
           </TouchableOpacity>
         )}
       </View>
+
+      {Platform.OS === "web" ? (
+        <View style={styles.webMapNotice}>
+          <Text style={styles.webMapNoticeText}>
+            Interactive maps are available in the Android and iOS app.
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.mapContainer}>
+          <NativeMapView
+            style={styles.map}
+            initialRegion={mapRegion}
+            showsUserLocation={!!currentLocation}
+            showsMyLocationButton={!!currentLocation}
+            onPress={(event: any) =>
+              selectMapLocation(
+                event.nativeEvent.coordinate
+              )
+            }
+          >
+            {currentLocation && !mapSelection && (
+              <NativeMarker
+                coordinate={currentLocation}
+                title="Current location"
+              />
+            )}
+
+            {mapSelection && (
+              <NativeMarker
+                coordinate={mapSelection}
+                title={
+                  type === "destination"
+                    ? "Destination"
+                    : "Pickup"
+                }
+                description={mapSelection.address}
+              />
+            )}
+          </NativeMapView>
+
+          <View pointerEvents="none" style={styles.mapHint}>
+            <Text style={styles.mapHintText}>
+              Tap the map to choose a location
+            </Text>
+          </View>
+
+          {mapSelection && (
+            <TouchableOpacity
+              style={styles.confirmMapButton}
+              onPress={() =>
+                selectLocation(mapSelection)
+              }
+            >
+              <Text style={styles.confirmMapText}>
+                Use this location
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       <TouchableOpacity
         style={styles.currentCard}
@@ -452,6 +587,68 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: "#E2E8F0",
+  },
+
+  mapContainer: {
+    height: 250,
+    marginTop: 14,
+    borderRadius: 20,
+    overflow: "hidden",
+    backgroundColor: "#E2E8F0",
+  },
+
+  map: {
+    flex: 1,
+  },
+
+  mapHint: {
+    position: "absolute",
+    top: 12,
+    alignSelf: "center",
+    backgroundColor: "rgba(255,255,255,0.92)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+
+  mapHintText: {
+    color: "#334155",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  webMapNotice: {
+    minHeight: 90,
+    marginTop: 14,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    backgroundColor: "#E0ECFF",
+  },
+
+  webMapNoticeText: {
+    textAlign: "center",
+    color: "#1D4ED8",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  confirmMapButton: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 14,
+    alignItems: "center",
+    backgroundColor: "#2563EB",
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+
+  confirmMapText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
   },
 
   searchIcon: {

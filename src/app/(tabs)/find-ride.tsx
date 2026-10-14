@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 
 import LocationSelector from "@/components/location/LocationSelector";
+import LocationMap from "@/components/maps/LocationMap";
 import { useRideStore } from "@/store/ride.store";
 import { goBackSafely } from "@/utils/navigation";
 
@@ -163,6 +164,16 @@ export default function FindRideScreen() {
         </Text>
 
         <LocationSelector />
+
+        {pickup && destination && (
+          <View style={styles.mapPreview}>
+            <LocationMap
+              pickup={pickup}
+              destination={destination}
+              showCurrentLocation
+            />
+          </View>
+        )}
 
         <TouchableOpacity
           activeOpacity={0.85}
@@ -414,6 +425,13 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     paddingBottom: 40,
+  },
+
+  mapPreview: {
+    height: 240,
+    marginTop: 18,
+    borderRadius: 20,
+    overflow: "hidden",
   },
 
   backButton: {

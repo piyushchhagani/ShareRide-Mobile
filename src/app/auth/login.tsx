@@ -54,9 +54,11 @@ export default function LoginScreen() {
       );
 
       const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Unable to login. Please try again.";
+        typeof error?.response?.data === "string"
+          ? error.response.data
+          : error?.response?.data?.message ||
+            error?.message ||
+            "Unable to login. Please try again.";
 
       Alert.alert("Login failed", String(message));
     } finally {

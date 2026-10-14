@@ -72,7 +72,7 @@ export default function ProfileScreen() {
           <View style={styles.menuContent}>
             <Text style={styles.menuTitle}>My Bookings</Text>
             <Text style={styles.menuSubtitle}>
-              View rides you've requested
+              View rides you&apos;ve requested
             </Text>
           </View>
 
@@ -88,7 +88,7 @@ export default function ProfileScreen() {
           <View style={styles.menuContent}>
             <Text style={styles.menuTitle}>My Rides</Text>
             <Text style={styles.menuSubtitle}>
-              Manage rides you've offered
+              Manage rides you&apos;ve offered
             </Text>
           </View>
 
