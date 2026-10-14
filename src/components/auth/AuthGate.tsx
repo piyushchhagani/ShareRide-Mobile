@@ -25,13 +25,14 @@ export default function AuthGate({ children }: Props) {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === "auth";
+    const isWelcomeScreen = segments[0] === "welcome";
 
-    if (!isAuthenticated && !inAuthGroup) {
-      router.replace("/auth/login");
+    if (!isAuthenticated && !inAuthGroup && !isWelcomeScreen) {
+      router.replace("/welcome");
       return;
     }
 
-    if (isAuthenticated && inAuthGroup) {
+    if (isAuthenticated && (inAuthGroup || isWelcomeScreen)) {
       router.replace("/(tabs)/home");
     }
   }, [isAuthenticated, isLoading, segments]);

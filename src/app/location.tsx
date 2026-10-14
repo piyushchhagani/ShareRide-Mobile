@@ -34,8 +34,9 @@ const NativeMarker = nativeMaps?.Marker;
 type SearchResult = LocationPoint;
 
 export default function LocationScreen() {
-  const { type } = useLocalSearchParams<{
+  const { type, query: initialQuery } = useLocalSearchParams<{
     type?: string;
+    query?: string | string[];
   }>();
 
   const { setPickup, setDestination } = useRideStore();
@@ -130,6 +131,15 @@ export default function LocationScreen() {
     }
   };
 
+  useEffect(() => {
+    const value = Array.isArray(initialQuery)
+      ? initialQuery[0]
+      : initialQuery;
+
+    if (value?.trim()) {
+      searchLocation(value.trim());
+    }
+  }, [initialQuery]);
   const searchLocation = (text: string) => {
     setQuery(text);
 
@@ -311,7 +321,7 @@ export default function LocationScreen() {
           style={styles.backButton}
           onPress={() => goBackSafely()}
         >
-          <Text style={styles.back}>‹</Text>
+          <Text style={styles.back}>Back</Text>
         </TouchableOpacity>
 
         <Text style={styles.title}>
@@ -320,9 +330,7 @@ export default function LocationScreen() {
       </View>
 
       <View style={styles.searchBox}>
-        <Text style={styles.searchIcon}>
-          ⌕
-        </Text>
+        <Text style={styles.searchIcon}>Search</Text>
 
         <TextInput
           value={query}
@@ -344,9 +352,7 @@ export default function LocationScreen() {
           <TouchableOpacity
             onPress={clearSearch}
           >
-            <Text style={styles.clear}>
-              ×
-            </Text>
+            <Text style={styles.clear}>Clear</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -435,7 +441,7 @@ export default function LocationScreen() {
             <Text
               style={styles.locationIcon}
             >
-              ◎
+              <Text style={styles.locationIcon}>Location</Text>
             </Text>
           )}
         </View>
@@ -456,9 +462,7 @@ export default function LocationScreen() {
           </Text>
         </View>
 
-        <Text style={styles.arrow}>
-          ›
-        </Text>
+        <Text style={styles.arrow}>Next</Text>
       </TouchableOpacity>
 
       {loading && (
@@ -491,7 +495,7 @@ export default function LocationScreen() {
             }
           >
             <View style={styles.resultIcon}>
-              <Text>⌖</Text>
+              <Text>Pin</Text>
             </View>
 
             <View style={styles.resultText}>
@@ -510,9 +514,7 @@ export default function LocationScreen() {
               </Text>
             </View>
 
-            <Text style={styles.arrow}>
-              ›
-            </Text>
+            <Text style={styles.arrow}>Next</Text>
           </TouchableOpacity>
         )}
         ListEmptyComponent={
@@ -520,7 +522,7 @@ export default function LocationScreen() {
           query.trim().length >= 3 ? (
             <View style={styles.empty}>
               <Text style={styles.emptyIcon}>
-                ⌕
+                <Text style={styles.emptyIcon}>Search</Text>
               </Text>
 
               <Text

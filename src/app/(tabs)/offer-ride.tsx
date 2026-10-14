@@ -18,6 +18,7 @@ import { router } from "expo-router";
 import DateTimePicker from "@expo/ui/community/datetime-picker";
 
 import LocationSelector from "@/components/location/LocationSelector";
+import FrequentPlaces from "@/components/location/FrequentPlaces";
 import LocationMap from "@/components/maps/LocationMap";
 import { useRideStore } from "@/store/ride.store";
 import { createRide } from "@/services/rides/ride.service";
@@ -144,7 +145,7 @@ export default function OfferRideScreen() {
       });
 
       Alert.alert(
-        "Ride published 🎉",
+        "Ride published!",
         "Your ride is now available to students.",
         [
           {
@@ -205,7 +206,7 @@ export default function OfferRideScreen() {
             }
           >
             <Text style={styles.back}>
-              ‹ Back
+              Back
             </Text>
           </TouchableOpacity>
 
@@ -221,6 +222,9 @@ export default function OfferRideScreen() {
           </View>
 
           <LocationSelector />
+
+        <FrequentPlaces type="pickup" />
+        <FrequentPlaces type="destination" />
 
           {pickup && destination && (
             <View style={styles.mapPreview}>
@@ -240,7 +244,7 @@ export default function OfferRideScreen() {
             }
           >
             <Text style={styles.calendar}>
-              ◷
+              Time
             </Text>
 
             <View style={styles.field}>
@@ -254,7 +258,7 @@ export default function OfferRideScreen() {
             </View>
 
             <Text style={styles.arrow}>
-              ›
+              Next
             </Text>
           </TouchableOpacity>
 
@@ -313,7 +317,7 @@ export default function OfferRideScreen() {
                     styles.seatButtonText
                   }
                 >
-                  −
+                  âˆ’
                 </Text>
               </TouchableOpacity>
 
