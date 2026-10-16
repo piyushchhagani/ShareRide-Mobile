@@ -1,3 +1,4 @@
+
 import { create } from "zustand";
 
 import {
@@ -6,17 +7,20 @@ import {
   logout as logoutService,
   User,
 } from "@/services/auth/auth.service";
+import { setUnauthorizedHandler } from "@/services/api/client";
 
 type AuthState = {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-
   setSession: (token: string, user: User) => void;
   restoreSession: () => Promise<void>;
   logout: () => Promise<void>;
+  expireSession: () => void;
 };
+
+let restorePromise: Promise<void> | null = null;
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
@@ -34,42 +38,53 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   restoreSession: async () => {
-    try {
-      set({ isLoading: true });
+    if (restorePromise) {
+      return restorePromise;
+    }
 
-      const token = await getStoredToken();
+    restorePromise = (async () => {
+      try {
+        set({ isLoading: true });
 
-      if (!token) {
+        const token = await getStoredToken();
+
+        if (!token) {
+          set({
+            token: null,
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+          });
+          return;
+        }
+
+        const user = await getCurrentUser();
+
+        set({
+          token,
+          user,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+      } catch {
+        try {
+          await logoutService();
+        } catch {
+          // Clear the local session even if logout cleanup fails.
+        }
+
         set({
           token: null,
           user: null,
           isAuthenticated: false,
           isLoading: false,
         });
-
-        return;
+      } finally {
+        restorePromise = null;
       }
+    })();
 
-      const user = await getCurrentUser();
-
-      set({
-        token,
-        user,
-        isAuthenticated: true,
-        isLoading: false,
-      });
-    } catch (error) {
-      console.log("SESSION RESTORE FAILED:", error);
-
-      await logoutService();
-
-      set({
-        token: null,
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-      });
-    }
+    return restorePromise;
   },
 
   logout: async () => {
@@ -84,4 +99,17 @@ export const useAuthStore = create<AuthState>((set) => ({
       });
     }
   },
+
+  expireSession: () => {
+    set({
+      token: null,
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+    });
+  },
 }));
+
+setUnauthorizedHandler(() => {
+  useAuthStore.getState().expireSession();
+});

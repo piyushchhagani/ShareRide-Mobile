@@ -31,45 +31,20 @@ export type LoginResponse = {
 export async function login(
   payload: LoginPayload
 ): Promise<LoginResponse> {
-  console.log("========== LOGIN DEBUG ==========");
-  console.log("API URL:", process.env.EXPO_PUBLIC_API_URL);
-  console.log("LOGIN URL:", `${process.env.EXPO_PUBLIC_API_URL}${ENDPOINTS.AUTH.LOGIN}`);
-  console.log("EMAIL:", payload.email);
-
-  try {
-    const response = await api.post<LoginResponse>(
-      ENDPOINTS.AUTH.LOGIN,
-      {
-        email: payload.email.trim(),
-        password: payload.password,
-      }
-    );
-
-    console.log("LOGIN STATUS:", response.status);
-    console.log("LOGIN RESPONSE:", response.data);
-
-    if (!response.data?.token) {
-      throw new Error("Backend returned no token.");
+  const { data } = await api.post<LoginResponse>(
+    ENDPOINTS.AUTH.LOGIN,
+    {
+      email: payload.email.trim(),
+      password: payload.password,
     }
+  );
 
-    await setStorageItem(
-      TOKEN_KEY,
-      response.data.token
-    );
-
-    console.log("TOKEN SAVED");
-
-    return response.data;
-  } catch (error: any) {
-    console.log("========== LOGIN ERROR ==========");
-    console.log("MESSAGE:", error?.message);
-    console.log("STATUS:", error?.response?.status);
-    console.log("DATA:", error?.response?.data);
-    console.log("URL:", error?.config?.url);
-    console.log("BASE URL:", error?.config?.baseURL);
-
-    throw error;
+  if (!data?.token) {
+    throw new Error("Backend returned no token.");
   }
+
+  await setStorageItem(TOKEN_KEY, data.token);
+  return data;
 }
 
 export async function register(
@@ -80,27 +55,12 @@ export async function register(
     phone?: string;
   }
 ): Promise<void> {
-  console.log("========== REGISTER DEBUG ==========");
-  console.log("EMAIL:", payload.email);
-
-  try {
-    await api.post(
-      ENDPOINTS.AUTH.REGISTER,
-      {
-        name: payload.name.trim(),
-        email: payload.email.trim(),
-        password: payload.password,
-        phone: payload.phone?.trim() || undefined,
-      }
-    );
-    console.log("REGISTER SUCCESS");
-  } catch (error: any) {
-    console.log("========== REGISTER ERROR ==========");
-    console.log("STATUS:", error?.response?.status);
-    console.log("DATA:", error?.response?.data);
-    console.log("MESSAGE:", error?.message);
-    throw error;
-  }
+  await api.post(ENDPOINTS.AUTH.REGISTER, {
+    name: payload.name.trim(),
+    email: payload.email.trim(),
+    password: payload.password,
+    phone: payload.phone?.trim() || undefined,
+  });
 }
 
 export async function getStoredToken() {
@@ -117,4 +77,4 @@ export async function getCurrentUser(): Promise<User> {
 
 export async function logout(): Promise<void> {
   await deleteStorageItem(TOKEN_KEY);
-}
+}

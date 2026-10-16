@@ -4,12 +4,12 @@ import {
   ActivityIndicator,
   FlatList,
   Keyboard,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
@@ -17,7 +17,6 @@ import * as Location from "expo-location";
 import type { Region } from "react-native-maps";
 
 import { useRideStore } from "@/store/ride.store";
-
 import {
   LocationPoint,
   useLocationStore,
@@ -25,9 +24,7 @@ import {
 import { goBackSafely } from "@/utils/navigation";
 
 const nativeMaps =
-  Platform.OS === "web"
-    ? null
-    : require("react-native-maps");
+  Platform.OS === "web" ? null : require("react-native-maps");
 const NativeMapView = nativeMaps?.default;
 const NativeMarker = nativeMaps?.Marker;
 
@@ -39,28 +36,21 @@ export default function LocationScreen() {
     query?: string | string[];
   }>();
 
-  const { setPickup, setDestination } = useRideStore();
-
-  const {
-    currentLocation,
-    setCurrentLocation,
-  } = useLocationStore();
+  const { pickup, destination, setPickup, setDestination } =
+    useRideStore();
+  const { currentLocation, setCurrentLocation } = useLocationStore();
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [locationLoading, setLocationLoading] =
-    useState(true);
-  const [mapSelection, setMapSelection] =
-    useState<LocationPoint | null>(null);
+  const [locationLoading, setLocationLoading] = useState(true);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [mapSelection, setMapSelection] = useState<LocationPoint | null>(null);
+  const selectedLocation =
+    type === "destination" ? destination : pickup;
 
-  const searchTimeout = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
-
-  const searchRequest = useRef<AbortController | null>(
-    null
-  );
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
     loadCurrentLocation();
@@ -74,27 +64,60 @@ export default function LocationScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    const value = Array.isArray(initialQuery)
+      ? initialQuery[0]
+      : initialQuery;
+
+    if (value?.trim()) {
+      searchLocation(value.trim());
+    }
+  }, [initialQuery]);
+
+  const applySelection = (location: SearchResult) => {
+    const safeLocation = {
+      ...location,
+      address: location.address?.trim() || "Selected location",
+    };
+
+    if (type === "destination") {
+      setDestination(safeLocation);
+    } else {
+      setPickup(safeLocation);
+    }
+  };
+
   const loadCurrentLocation = async () => {
     try {
       setLocationLoading(true);
+      setLocationError(null);
 
-      const permission =
-        await Location.requestForegroundPermissionsAsync();
+      const permission = await Location.requestForegroundPermissionsAsync();
 
       if (permission.status !== "granted") {
+        setLocationError(
+          "Location permission is off. Enable it to use your current location."
+        );
+        setCurrentLocation(null);
         return;
       }
 
-      const position =
-        await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        setLocationError(
+          "Location services are unavailable on this device right now."
+        );
+        setCurrentLocation(null);
+        return;
+      }
+
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
 
       const { latitude, longitude } = position.coords;
 
-      let address = `${latitude.toFixed(
-        6
-      )}, ${longitude.toFixed(6)}`;
+      let address = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
 
       try {
         const response = await fetch(
@@ -109,12 +132,10 @@ export default function LocationScreen() {
 
         if (response.ok) {
           const data = await response.json();
-
-          address =
-            data.display_name || address;
+          address = data.display_name || address;
         }
       } catch {
-        // Coordinates remain as fallback address.
+        // Keep coordinates as fallback.
       }
 
       const location: LocationPoint = {
@@ -125,21 +146,15 @@ export default function LocationScreen() {
 
       setCurrentLocation(location);
     } catch {
+      setLocationError(
+        "Current location is unavailable right now. You can still search for a place manually."
+      );
       setCurrentLocation(null);
     } finally {
       setLocationLoading(false);
     }
   };
 
-  useEffect(() => {
-    const value = Array.isArray(initialQuery)
-      ? initialQuery[0]
-      : initialQuery;
-
-    if (value?.trim()) {
-      searchLocation(value.trim());
-    }
-  }, [initialQuery]);
   const searchLocation = (text: string) => {
     setQuery(text);
 
@@ -169,13 +184,11 @@ export default function LocationScreen() {
       const controller = new AbortController();
       searchRequest.current = controller;
 
-      const searchQuery =
-        `${text}, Nagpur, Maharashtra, India`;
-
+      const queryText = `${text}, Nagpur, Maharashtra, India`;
       const url =
         `https://nominatim.openstreetmap.org/search` +
         `?format=jsonv2` +
-        `&q=${encodeURIComponent(searchQuery)}` +
+        `&q=${encodeURIComponent(queryText)}` +
         `&limit=8` +
         `&addressdetails=1` +
         `&countrycodes=in`;
@@ -189,24 +202,19 @@ export default function LocationScreen() {
       });
 
       if (!response.ok) {
-        throw new Error(
-          `Search failed: ${response.status}`
-        );
+        throw new Error(`Search failed: ${response.status}`);
       }
 
       const data = await response.json();
-
       const formatted: SearchResult[] = data
         .map((item: any) => ({
-          address:
-            item.display_name || text,
+          address: item.display_name || text,
           latitude: Number(item.lat),
           longitude: Number(item.lon),
         }))
         .filter(
           (item: SearchResult) =>
-            Number.isFinite(item.latitude) &&
-            Number.isFinite(item.longitude)
+            Number.isFinite(item.latitude) && Number.isFinite(item.longitude)
         );
 
       setResults(formatted);
@@ -221,20 +229,6 @@ export default function LocationScreen() {
     }
   };
 
-  const selectLocation = (
-    location: SearchResult
-  ) => {
-    Keyboard.dismiss();
-
-    if (type === "destination") {
-      setDestination(location);
-    } else {
-      setPickup(location);
-    }
-
-    goBackSafely();
-  };
-
   const selectMapLocation = async ({
     latitude,
     longitude,
@@ -244,22 +238,20 @@ export default function LocationScreen() {
   }) => {
     Keyboard.dismiss();
 
-    const fallbackAddress = `${latitude.toFixed(
-      6
-    )}, ${longitude.toFixed(6)}`;
-
-    setMapSelection({
+    const fallbackAddress = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+    const nextSelection: SearchResult = {
       address: fallbackAddress,
       latitude,
       longitude,
-    });
+    };
+
+    setMapSelection(nextSelection);
 
     try {
-      const addresses =
-        await Location.reverseGeocodeAsync({
-          latitude,
-          longitude,
-        });
+      const addresses = await Location.reverseGeocodeAsync({
+        latitude,
+        longitude,
+      });
 
       const address = addresses[0];
       const formattedAddress = [
@@ -270,29 +262,28 @@ export default function LocationScreen() {
         address?.region,
       ]
         .filter(Boolean)
-        .filter(
-          (value, index, values) =>
-            values.indexOf(value) === index
-        )
+        .filter((value, index, values) => values.indexOf(value) === index)
         .join(", ");
 
       if (formattedAddress) {
-        setMapSelection({
+        const resolved = {
           address: formattedAddress,
           latitude,
           longitude,
-        });
+        };
+
+        setMapSelection(resolved);
+        applySelection(resolved);
       }
     } catch {
-      // Coordinates remain a valid fallback address.
+      // Keep the fallback address from the map tap.
+      applySelection(nextSelection);
     }
   };
 
   const mapRegion: Region = {
-    latitude: mapSelection?.latitude ??
-      currentLocation?.latitude ?? 21.1458,
-    longitude: mapSelection?.longitude ??
-      currentLocation?.longitude ?? 79.0882,
+    latitude: mapSelection?.latitude ?? currentLocation?.latitude ?? 21.1458,
+    longitude: mapSelection?.longitude ?? currentLocation?.longitude ?? 79.0882,
     latitudeDelta: 0.08,
     longitudeDelta: 0.08,
   };
@@ -303,42 +294,37 @@ export default function LocationScreen() {
     }
 
     searchRequest.current?.abort();
-
     setQuery("");
     setResults([]);
     setLoading(false);
   };
 
+  const canContinue =
+    !!selectedLocation &&
+    !!selectedLocation.address &&
+    Number.isFinite(selectedLocation.latitude) &&
+    Number.isFinite(selectedLocation.longitude);
+
   const title =
-    type === "destination"
-      ? "Choose destination"
-      : "Choose pickup";
+    type === "destination" ? "Choose destination" : "Choose pickup";
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => goBackSafely()}
-        >
-          <Text style={styles.back}>Back</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => goBackSafely()}>
+          <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>
-          {title}
-        </Text>
+        <Text style={styles.title}>{title}</Text>
       </View>
 
       <View style={styles.searchBox}>
         <Text style={styles.searchIcon}>Search</Text>
-
         <TextInput
           value={query}
           onChangeText={searchLocation}
           placeholder={
-            type === "destination"
-              ? "Search destination"
-              : "Search pickup location"
+            type === "destination" ? "Search destination" : "Search pickup location"
           }
           placeholderTextColor="#94A3B8"
           style={styles.input}
@@ -349,10 +335,8 @@ export default function LocationScreen() {
         />
 
         {query.length > 0 && (
-          <TouchableOpacity
-            onPress={clearSearch}
-          >
-            <Text style={styles.clear}>Clear</Text>
+          <TouchableOpacity onPress={clearSearch}>
+            <Text style={styles.clearText}>Clear</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -360,7 +344,7 @@ export default function LocationScreen() {
       {Platform.OS === "web" ? (
         <View style={styles.webMapNotice}>
           <Text style={styles.webMapNoticeText}>
-            Interactive maps are available in the Android and iOS app.
+            Use search to find a location quickly. Native maps are available on Android and iOS.
           </Text>
         </View>
       ) : (
@@ -371,176 +355,136 @@ export default function LocationScreen() {
             showsUserLocation={!!currentLocation}
             showsMyLocationButton={!!currentLocation}
             onPress={(event: any) =>
-              selectMapLocation(
-                event.nativeEvent.coordinate
-              )
+              selectMapLocation(event.nativeEvent.coordinate)
             }
           >
             {currentLocation && !mapSelection && (
-              <NativeMarker
-                coordinate={currentLocation}
-                title="Current location"
-              />
+              <NativeMarker coordinate={currentLocation} title="Current location" />
             )}
 
             {mapSelection && (
               <NativeMarker
                 coordinate={mapSelection}
-                title={
-                  type === "destination"
-                    ? "Destination"
-                    : "Pickup"
-                }
+                title={type === "destination" ? "Destination" : "Pickup"}
                 description={mapSelection.address}
               />
             )}
           </NativeMapView>
 
           <View pointerEvents="none" style={styles.mapHint}>
-            <Text style={styles.mapHintText}>
-              Tap the map to choose a location
-            </Text>
+            <Text style={styles.mapHintText}>Tap the map to choose a location</Text>
           </View>
 
           {mapSelection && (
             <TouchableOpacity
               style={styles.confirmMapButton}
-              onPress={() =>
-                selectLocation(mapSelection)
-              }
+              onPress={() => applySelection(mapSelection)}
             >
-              <Text style={styles.confirmMapText}>
-                Use this location
-              </Text>
+              <Text style={styles.confirmMapText}>Use this location</Text>
             </TouchableOpacity>
           )}
         </View>
       )}
 
       <TouchableOpacity
-        style={styles.currentCard}
-        disabled={
-          locationLoading ||
-          !currentLocation
-        }
+        activeOpacity={0.8}
+        style={[
+          styles.currentCard,
+          !currentLocation && !locationLoading && styles.currentCardWarning,
+        ]}
+        disabled={locationLoading || !currentLocation}
         onPress={() => {
           if (currentLocation) {
-            selectLocation(
-              currentLocation
-            );
+            applySelection(currentLocation);
           }
         }}
       >
-        <View style={styles.currentIcon}>
+        <View style={styles.currentIconWrap}>
           {locationLoading ? (
-            <ActivityIndicator
-              size="small"
-              color="#2563EB"
-            />
+            <ActivityIndicator size="small" color="#2563EB" />
           ) : (
-            <Text
-              style={styles.locationIcon}
-            >
-              <Text style={styles.locationIcon}>Location</Text>
-            </Text>
+            <Text style={styles.locationBadge}>Location</Text>
           )}
         </View>
 
         <View style={styles.currentText}>
-          <Text style={styles.currentTitle}>
-            Use current location
-          </Text>
-
-          <Text
-            numberOfLines={2}
-            style={styles.currentAddress}
-          >
+          <Text style={styles.currentTitle}>Use current location</Text>
+          <Text numberOfLines={2} style={styles.currentAddress}>
             {locationLoading
               ? "Detecting location..."
-              : currentLocation?.address ||
-                "Location unavailable"}
+              : locationError || currentLocation?.address || "Location unavailable"}
           </Text>
         </View>
 
-        <Text style={styles.arrow}>Next</Text>
+        <Text style={styles.navArrow}>›</Text>
       </TouchableOpacity>
 
       {loading && (
-        <View style={styles.loading}>
-          <ActivityIndicator
-            color="#2563EB"
-          />
-
-          <Text style={styles.loadingText}>
-            Searching locations...
-          </Text>
+        <View style={styles.loadingRow}>
+          <ActivityIndicator size="small" color="#2563EB" />
+          <Text style={styles.loadingText}>Searching locations...</Text>
         </View>
       )}
 
       <FlatList
         data={results}
-        keyExtractor={(item, index) =>
-          `${item.latitude}-${item.longitude}-${index}`
-        }
+        keyExtractor={(item, index) => `${item.latitude}-${item.longitude}-${index}`}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={
-          styles.results
-        }
+        contentContainerStyle={styles.results}
         renderItem={({ item }) => (
           <TouchableOpacity
+            activeOpacity={0.8}
             style={styles.resultCard}
-            onPress={() =>
-              selectLocation(item)
-            }
+            onPress={() => applySelection(item)}
           >
-            <View style={styles.resultIcon}>
-              <Text>Pin</Text>
+            <View style={styles.resultIconWrap}>
+              <Text style={styles.pinIcon}>Pin</Text>
             </View>
 
             <View style={styles.resultText}>
-              <Text
-                numberOfLines={1}
-                style={styles.resultTitle}
-              >
-                {item.address.split(",")[0]}
+              <Text numberOfLines={1} style={styles.resultTitle}>
+                {item.address.split(",")[0] || "Selected location"}
               </Text>
-
-              <Text
-                numberOfLines={2}
-                style={styles.resultAddress}
-              >
+              <Text numberOfLines={2} style={styles.resultAddress}>
                 {item.address}
               </Text>
             </View>
 
-            <Text style={styles.arrow}>Next</Text>
+            <Text style={styles.navArrow}>›</Text>
           </TouchableOpacity>
         )}
         ListEmptyComponent={
-          !loading &&
-          query.trim().length >= 3 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>
-                <Text style={styles.emptyIcon}>Search</Text>
-              </Text>
-
-              <Text
-                style={styles.emptyTitle}
-              >
-                No locations found
-              </Text>
-
-              <Text
-                style={styles.emptyText}
-              >
-                Try a college, landmark,
-                street or area.
+          !loading && query.trim().length >= 3 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>Search</Text>
+              <Text style={styles.emptyTitle}>No locations found</Text>
+              <Text style={styles.emptyText}>
+                Try a college, landmark, street or area.
               </Text>
             </View>
           ) : null
         }
       />
+
+      <View style={styles.footer}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          style={[styles.nextButton, !canContinue && styles.nextButtonDisabled]}
+          disabled={!canContinue}
+          onPress={() => {
+            if (!canContinue) {
+              return;
+            }
+
+            goBackSafely();
+          }}
+        >
+          <Text style={[styles.nextText, !canContinue && styles.nextTextDisabled]}>
+            Next
+          </Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -551,247 +495,253 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC",
     paddingHorizontal: 20,
   },
-
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingTop: 8,
-    paddingBottom: 18,
+    paddingTop: 10,
+    paddingBottom: 14,
   },
-
   backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     marginRight: 12,
   },
-
-  back: {
-    fontSize: 30,
-    color: "#0F172A",
+  backText: {
+    fontSize: 16,
+    color: "#2563EB",
+    fontWeight: "700",
   },
-
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "800",
     color: "#0F172A",
   },
-
   searchBox: {
-    height: 56,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 17,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: "#E2E8F0",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 14,
   },
-
+  searchIcon: {
+    fontSize: 18,
+    color: "#64748B",
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: "#0F172A",
+    paddingVertical: 2,
+  },
+  clearText: {
+    color: "#64748B",
+    fontSize: 14,
+    fontWeight: "700",
+    paddingLeft: 8,
+  },
+  webMapNotice: {
+    minHeight: 78,
+    backgroundColor: "#E0ECFF",
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    marginBottom: 14,
+    justifyContent: "center",
+  },
+  webMapNoticeText: {
+    color: "#1D4ED8",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
   mapContainer: {
-    height: 250,
-    marginTop: 14,
+    height: 220,
     borderRadius: 20,
     overflow: "hidden",
+    marginBottom: 14,
     backgroundColor: "#E2E8F0",
   },
-
   map: {
     flex: 1,
   },
-
   mapHint: {
     position: "absolute",
-    top: 12,
+    top: 10,
     alignSelf: "center",
     backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 16,
   },
-
   mapHintText: {
     color: "#334155",
     fontSize: 12,
     fontWeight: "600",
   },
-
-  webMapNotice: {
-    minHeight: 90,
-    marginTop: 14,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    backgroundColor: "#E0ECFF",
-  },
-
-  webMapNoticeText: {
-    textAlign: "center",
-    color: "#1D4ED8",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
   confirmMapButton: {
     position: "absolute",
     left: 14,
     right: 14,
     bottom: 14,
-    alignItems: "center",
     backgroundColor: "#2563EB",
-    paddingVertical: 12,
     borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: "center",
   },
-
   confirmMapText: {
     color: "#FFFFFF",
-    fontSize: 14,
     fontWeight: "800",
+    fontSize: 14,
   },
-
-  searchIcon: {
-    fontSize: 24,
-    color: "#64748B",
-    marginRight: 10,
-  },
-
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: "#0F172A",
-  },
-
-  clear: {
-    fontSize: 26,
-    color: "#94A3B8",
-  },
-
   currentCard: {
-    marginTop: 14,
-    backgroundColor: "#EFF6FF",
-    borderRadius: 17,
-    padding: 15,
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#EFF6FF",
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
   },
-
-  currentIcon: {
+  currentCardWarning: {
+    backgroundColor: "#FFF7ED",
+    borderColor: "#FED7AA",
+  },
+  currentIconWrap: {
     width: 44,
     height: 44,
     borderRadius: 22,
     backgroundColor: "#DBEAFE",
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 12,
   },
-
-  locationIcon: {
-    fontSize: 24,
-    color: "#2563EB",
+  locationBadge: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#1D4ED8",
+    letterSpacing: 0.6,
   },
-
   currentText: {
     flex: 1,
-    marginLeft: 12,
-    marginRight: 8,
+    minWidth: 0,
   },
-
   currentTitle: {
-    fontSize: 15,
+    color: "#1D4ED8",
     fontWeight: "700",
-    color: "#2563EB",
+    fontSize: 15,
   },
-
   currentAddress: {
     marginTop: 3,
     fontSize: 12,
-    lineHeight: 17,
     color: "#64748B",
+    lineHeight: 17,
   },
-
-  arrow: {
-    fontSize: 28,
+  navArrow: {
+    fontSize: 24,
     color: "#CBD5E1",
+    marginLeft: 8,
   },
-
-  loading: {
+  loadingRow: {
     flexDirection: "row",
-    justifyContent: "center",
     alignItems: "center",
-    marginTop: 16,
+    justifyContent: "center",
+    paddingVertical: 12,
   },
-
   loadingText: {
     marginLeft: 8,
     color: "#64748B",
+    fontSize: 13,
   },
-
   results: {
-    paddingTop: 14,
-    paddingBottom: 30,
+    paddingBottom: 24,
   },
-
   resultCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 17,
-    padding: 14,
-    marginBottom: 9,
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 10,
   },
-
-  resultIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  resultIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: "#F1F5F9",
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 12,
   },
-
+  pinIcon: {
+    fontSize: 11,
+    color: "#475569",
+    fontWeight: "700",
+  },
   resultText: {
     flex: 1,
-    marginLeft: 12,
-    marginRight: 6,
+    minWidth: 0,
   },
-
   resultTitle: {
     fontSize: 15,
     fontWeight: "700",
     color: "#0F172A",
   },
-
   resultAddress: {
-    marginTop: 3,
+    marginTop: 4,
     fontSize: 12,
-    lineHeight: 17,
     color: "#64748B",
+    lineHeight: 17,
   },
-
-  empty: {
+  emptyState: {
     alignItems: "center",
-    marginTop: 50,
-    paddingHorizontal: 30,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
   },
-
   emptyIcon: {
-    fontSize: 40,
+    fontSize: 30,
     color: "#CBD5E1",
   },
-
   emptyTitle: {
-    marginTop: 12,
+    marginTop: 10,
+    color: "#0F172A",
     fontSize: 17,
     fontWeight: "700",
-    color: "#0F172A",
   },
-
   emptyText: {
     marginTop: 6,
     textAlign: "center",
     color: "#64748B",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  footer: {
+    paddingTop: 12,
+    paddingBottom: 24,
+  },
+  nextButton: {
+    backgroundColor: "#2563EB",
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  nextButtonDisabled: {
+    backgroundColor: "#CBD5E1",
+  },
+  nextText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  nextTextDisabled: {
+    color: "#F8FAFC",
   },
 });

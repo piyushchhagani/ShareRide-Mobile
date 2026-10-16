@@ -22,15 +22,20 @@ import { goBackSafely } from "@/utils/navigation";
 import LocationMap from "@/components/maps/LocationMap";
 
 export default function RideDetailsScreen() {
-  const { rideId } = useLocalSearchParams<{
+  const { rideId, requestedSeats } = useLocalSearchParams<{
     rideId?: string;
+    requestedSeats?: string;
   }>();
+  const requestedSeatsParam = Array.isArray(requestedSeats)
+    ? requestedSeats[0]
+    : requestedSeats;
 
   const [ride, setRide] = useState<Ride | null>(null);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
   const [existingRequest, setExistingRequest] =
     useState<RideRequest | null>(null);
+  const [bookingStatusError, setBookingStatusError] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -47,6 +52,7 @@ export default function RideDetailsScreen() {
     try {
       setLoading(true);
       setError("");
+      setBookingStatusError("");
 
       const result = await getRide(Number(rideId));
       setRide(result);
@@ -59,14 +65,12 @@ export default function RideDetailsScreen() {
         );
 
         setExistingRequest(request ?? null);
-      } catch (requestError) {
-        console.log(
-          "Unable to check existing request:",
-          requestError
+      } catch {
+        setBookingStatusError(
+          "Your current booking status is unavailable. You can still send a request."
         );
       }
-    } catch (error) {
-      console.error("GET RIDE ERROR:", error);
+    } catch {
       setError("Unable to load this ride.");
     } finally {
       setLoading(false);
@@ -74,7 +78,12 @@ export default function RideDetailsScreen() {
   };
 
   const handleRequest = async () => {
-    if (!ride || requesting || existingRequest) {
+    if (
+      !ride ||
+      requesting ||
+      existingRequest?.status === "PENDING" ||
+      existingRequest?.status === "ACCEPTED"
+    ) {
       return;
     }
 
@@ -89,7 +98,21 @@ export default function RideDetailsScreen() {
     try {
       setRequesting(true);
 
-      const result = await requestRide(ride.id, 1);
+      const requestedSeatsValue = Number(requestedSeatsParam);
+      const seats =
+        Number.isInteger(requestedSeatsValue) && requestedSeatsValue > 0
+          ? requestedSeatsValue
+          : existingRequest?.requestedSeats ?? 1;
+
+      if (seats > ride.availableSeats) {
+        Alert.alert(
+          "Not enough seats",
+          "This ride no longer has enough available seats."
+        );
+        return;
+      }
+
+      const result = await requestRide(ride.id, seats);
 
       setExistingRequest(result);
 
@@ -108,11 +131,6 @@ export default function RideDetailsScreen() {
         ]
       );
     } catch (error: any) {
-      console.error(
-        "REQUEST RIDE ERROR:",
-        error?.response?.data || error
-      );
-
       const message =
         typeof error?.response?.data === "string"
           ? error.response.data
@@ -193,6 +211,11 @@ export default function RideDetailsScreen() {
 
   const requestRejected =
     existingRequest?.status === "REJECTED";
+  const requestedSeatCount =
+    Number.isInteger(Number(requestedSeatsParam)) &&
+    Number(requestedSeatsParam) > 0
+      ? Number(requestedSeatsParam)
+      : existingRequest?.requestedSeats ?? 1;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -209,6 +232,10 @@ export default function RideDetailsScreen() {
         <Text style={styles.title}>
           Ride details
         </Text>
+
+        {bookingStatusError ? (
+          <Text style={styles.statusNotice}>{bookingStatusError}</Text>
+        ) : null}
 
         {/* DRIVER */}
 
@@ -337,7 +364,8 @@ export default function RideDetailsScreen() {
             </Text>
 
             <Text style={styles.infoSecondary}>
-              Request 1 seat
+              Request {requestedSeatCount}{" "}
+              {requestedSeatCount === 1 ? "seat" : "seats"}
             </Text>
           </View>
         </View>
@@ -387,7 +415,7 @@ export default function RideDetailsScreen() {
 
         {/* REQUEST BUTTON */}
 
-        {!existingRequest && (
+        {(!existingRequest || requestRejected) && (
           <TouchableOpacity
             disabled={
               requesting ||
@@ -407,7 +435,9 @@ export default function RideDetailsScreen() {
               <Text style={styles.requestText}>
                 {ride.availableSeats <= 0
                   ? "Ride full"
-                  : "Request this ride"}
+                  : requestRejected
+                    ? "Request again"
+                    : "Request this ride"}
               </Text>
             )}
           </TouchableOpacity>
@@ -637,6 +667,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#F1F5F9",
+  },
+
+  statusNotice: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    color: "#92400E",
+    backgroundColor: "#FFFBEB",
+    fontSize: 13,
   },
 
   acceptedCard: {

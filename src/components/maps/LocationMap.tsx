@@ -1,25 +1,21 @@
-/* eslint-disable react-hooks/immutability, react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   StyleSheet,
   Text,
   View,
-  Platform,
 } from "react-native";
 import * as Location from "expo-location";
-import type { Region } from "react-native-maps";
+import MapView, {
+  Marker,
+  Polyline,
+  type Region,
+} from "react-native-maps";
 
+import { colors, radius, spacing } from "@/theme/tokens";
 import { calculateRoute } from "@/services/routes/route.service";
-
-
-const nativeMaps =
-  Platform.OS === "web"
-    ? null
-    : require("react-native-maps");
-const NativeMapView = nativeMaps?.default;
-const NativeMarker = nativeMaps?.Marker;
-const NativePolyline = nativeMaps?.Polyline;
 
 type LocationPoint = {
   address?: string;
@@ -27,42 +23,183 @@ type LocationPoint = {
   longitude: number;
 };
 
-type LocationMapProps = {
+type Props = {
   pickup?: LocationPoint | null;
   destination?: LocationPoint | null;
   showCurrentLocation?: boolean;
+};
+
+const NAGPUR_REGION: Region = {
+  latitude: 21.1458,
+  longitude: 79.0882,
+  latitudeDelta: 0.12,
+  longitudeDelta: 0.12,
 };
 
 export default function LocationMap({
   pickup,
   destination,
   showCurrentLocation = true,
-}: LocationMapProps) {
-  const mapRef = useRef<any>(null);
+}: Props) {
+  const mapRef = useRef<MapView>(null);
   const [currentLocation, setCurrentLocation] =
     useState<LocationPoint | null>(null);
-
   const [routeCoordinates, setRouteCoordinates] =
-    useState<number[][]>([]);
+    useState<{ latitude: number; longitude: number }[]>([]);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeError, setRouteError] = useState("");
+  const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState("");
+  const [locationError, setLocationError] = useState("");
 
-  const [loading, setLoading] = useState(true);
-  const [routeLoading, setRouteLoading] =
-    useState(false);
-  const [error, setError] = useState<string | null>(
-    null
+  const points = useMemo(
+    () =>
+      [
+        pickup,
+        destination,
+        showCurrentLocation ? currentLocation : null,
+      ].filter(
+        (point): point is LocationPoint =>
+          !!point &&
+          Number.isFinite(point.latitude) &&
+          Number.isFinite(point.longitude) &&
+          Math.abs(point.latitude) <= 90 &&
+          Math.abs(point.longitude) <= 180
+      ),
+    [pickup, destination, currentLocation, showCurrentLocation]
   );
 
+  const region = useMemo<Region>(() => {
+    if (!points.length) return NAGPUR_REGION;
+
+    const latitudes = points.map((point) => point.latitude);
+    const longitudes = points.map((point) => point.longitude);
+    const minLat = Math.min(...latitudes);
+    const maxLat = Math.max(...latitudes);
+    const minLng = Math.min(...longitudes);
+    const maxLng = Math.max(...longitudes);
+
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max(maxLat - minLat + 0.025, 0.025),
+      longitudeDelta: Math.max(maxLng - minLng + 0.025, 0.025),
+    };
+  }, [points]);
+
   useEffect(() => {
-    loadCurrentLocation();
+    const timeout = setTimeout(() => {
+      setMapError((current) =>
+        current || "The map could not load. Check Google Maps and network access."
+      );
+    }, 10000);
+
+    return () => clearTimeout(timeout);
   }, []);
 
   useEffect(() => {
-    if (!pickup || !destination) {
-      setRouteCoordinates([]);
-      return;
+    let active = true;
+
+    async function locate() {
+      if (!showCurrentLocation) return;
+
+      setLocationLoading(true);
+      setLocationError("");
+
+      try {
+        const permission =
+          await Location.requestForegroundPermissionsAsync();
+
+        if (permission.status !== "granted") {
+          if (active) {
+            setLocationError("Enable location permission to show your position.");
+          }
+          return;
+        }
+
+        const result = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+
+        if (active) {
+          setCurrentLocation({
+            latitude: result.coords.latitude,
+            longitude: result.coords.longitude,
+          });
+        }
+      } catch {
+        if (active) {
+          setLocationError("Current location is unavailable. You can still select places.");
+        }
+      } finally {
+        if (active) setLocationLoading(false);
+      }
     }
 
-    loadRoute();
+    void locate();
+
+    return () => {
+      active = false;
+    };
+  }, [showCurrentLocation]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function route() {
+      if (!pickup || !destination) {
+        setRouteCoordinates([]);
+        setRouteError("");
+        return;
+      }
+
+      setRouteLoading(true);
+      setRouteError("");
+
+      try {
+        const result = await calculateRoute({
+          pickupLatitude: pickup.latitude,
+          pickupLongitude: pickup.longitude,
+          destinationLatitude: destination.latitude,
+          destinationLongitude: destination.longitude,
+        });
+
+        const coordinates = (result.coordinates ?? [])
+          .filter(
+            (item) =>
+              Array.isArray(item) &&
+              item.length >= 2 &&
+              Number.isFinite(Number(item[0])) &&
+              Number.isFinite(Number(item[1]))
+          )
+          .map(([longitude, latitude]) => ({
+            latitude: Number(latitude),
+            longitude: Number(longitude),
+          }));
+
+        if (!coordinates.length) {
+          throw new Error("Route response did not contain coordinates.");
+        }
+
+        if (active) setRouteCoordinates(coordinates);
+      } catch {
+        if (active) {
+          setRouteCoordinates([]);
+          setRouteError(
+            "Unable to draw the route. Check the connection and try again."
+          );
+        }
+      } finally {
+        if (active) setRouteLoading(false);
+      }
+    }
+
+    void route();
+
+    return () => {
+      active = false;
+    };
   }, [
     pickup?.latitude,
     pickup?.longitude,
@@ -70,198 +207,50 @@ export default function LocationMap({
     destination?.longitude,
   ]);
 
-  const loadCurrentLocation = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const permission =
-        await Location.requestForegroundPermissionsAsync();
-
-      if (permission.status !== "granted") {
-        setError(
-          "Location permission was denied."
-        );
-        return;
-      }
-
-      const location =
-        await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-
-      setCurrentLocation({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
-    } catch {
-      setError(
-        "Unable to determine your location."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadRoute = async () => {
-    if (!pickup || !destination) {
-      return;
-    }
-
-    try {
-      setRouteLoading(true);
-      setError(null);
-
-      const response = await calculateRoute({
-        pickupLatitude: pickup.latitude,
-        pickupLongitude: pickup.longitude,
-        destinationLatitude: destination.latitude,
-        destinationLongitude: destination.longitude,
-      });
-
-      const coordinates = response.coordinates
-        .filter(
-          (coordinate) =>
-            Array.isArray(coordinate) &&
-            coordinate.length >= 2 &&
-            Number.isFinite(Number(coordinate[0])) &&
-            Number.isFinite(Number(coordinate[1]))
-        )
-        .map((coordinate) => [
-          Number(coordinate[0]),
-          Number(coordinate[1]),
-        ]);
-
-      if (coordinates.length < 2) {
-        throw new Error("Route response contained no usable coordinates");
-      }
-
-      setRouteCoordinates(coordinates);
-    } catch (routeError) {
-      console.error(
-        "ROUTE CALCULATION ERROR:",
-        routeError
-      );
-
-      setRouteCoordinates([]);
-      setError(
-        "Unable to calculate route."
-      );
-    } finally {
-      setRouteLoading(false);
-    }
-  };
-
-  const region = useMemo<Region | null>(() => {
-    const points = [
-      pickup,
-      destination,
-      showCurrentLocation
-        ? currentLocation
-        : null,
-    ].filter(Boolean) as LocationPoint[];
-
-    if (points.length === 0) {
-      return null;
-    }
-
-    const latitudes = points.map(
-      (point) => point.latitude
-    );
-
-    const longitudes = points.map(
-      (point) => point.longitude
-    );
-
-    const minLatitude = Math.min(...latitudes);
-    const maxLatitude = Math.max(...latitudes);
-    const minLongitude = Math.min(...longitudes);
-    const maxLongitude = Math.max(...longitudes);
-
-    return {
-      latitude:
-        (minLatitude + maxLatitude) / 2,
-      longitude:
-        (minLongitude + maxLongitude) / 2,
-      latitudeDelta: Math.max(
-        maxLatitude - minLatitude + 0.02,
-        0.015
-      ),
-      longitudeDelta: Math.max(
-        maxLongitude - minLongitude + 0.02,
-        0.015
-      ),
-    };
-  }, [
-    pickup,
-    destination,
-    currentLocation,
-    showCurrentLocation,
-  ]);
-
   useEffect(() => {
-    const points = [
-      pickup,
-      destination,
-      showCurrentLocation ? currentLocation : null,
-    ].filter(
-      (point): point is LocationPoint =>
-        !!point &&
-        Number.isFinite(point.latitude) &&
-        Number.isFinite(point.longitude)
-    );
+    if (!points.length) return;
 
-    if (points.length === 0) {
+    if (points.length === 1) {
+      mapRef.current?.animateToRegion(
+        {
+          latitude: points[0].latitude,
+          longitude: points[0].longitude,
+          latitudeDelta: 0.025,
+          longitudeDelta: 0.025,
+        },
+        350
+      );
       return;
     }
 
     mapRef.current?.fitToCoordinates(
-      points.map((point) => ({
-        latitude: point.latitude,
-        longitude: point.longitude,
+      points.map(({ latitude, longitude }) => ({
+        latitude,
+        longitude,
       })),
       {
-        edgePadding: {
-          top: 70,
-          right: 45,
-          bottom: 70,
-          left: 45,
-        },
+        edgePadding: { top: 70, right: 50, bottom: 70, left: 50 },
         animated: true,
       }
     );
-  }, [pickup, destination, currentLocation, showCurrentLocation]);
-
-  if (loading && !region) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator
-          size="large"
-          color="#2563EB"
-        />
-
-        <Text style={styles.loading}>
-          Loading map...
-        </Text>
-      </View>
-    );
-  }
-
-  if (!region) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.error}>
-          {error || "Map location unavailable."}
-        </Text>
-      </View>
-    );
-  }
+  }, [points]);
 
   if (Platform.OS === "web") {
     return (
-      <View style={styles.webFallback}>
-        <Text style={styles.error}>
-          Interactive maps are available in the Android and iOS app.
+      <View style={styles.fallback}>
+        <Text style={styles.fallbackTitle}>Map preview</Text>
+        <Text style={styles.fallbackText}>
+          Interactive maps are available in the mobile app.
+        </Text>
+        <Text style={styles.coordinates}>
+          {pickup
+            ? `Pickup: ${pickup.latitude.toFixed(5)}, ${pickup.longitude.toFixed(5)}`
+            : "Choose a pickup location"}
+        </Text>
+        <Text style={styles.coordinates}>
+          {destination
+            ? `Destination: ${destination.latitude.toFixed(5)}, ${destination.longitude.toFixed(5)}`
+            : "Choose a destination"}
         </Text>
       </View>
     );
@@ -269,98 +258,89 @@ export default function LocationMap({
 
   return (
     <View style={styles.container}>
-      <NativeMapView
+      <MapView
         ref={mapRef}
         style={styles.map}
         initialRegion={region}
-        showsUserLocation={
-          showCurrentLocation
-        }
-        showsMyLocationButton={
-          showCurrentLocation
-        }
+        showsUserLocation={showCurrentLocation && !!currentLocation}
+        showsMyLocationButton={showCurrentLocation}
+        loadingEnabled
+        toolbarEnabled
+        onMapReady={() => {
+          setMapReady(true);
+          setMapError("");
+        }}
       >
         {pickup && (
-          <NativeMarker
+          <Marker
             coordinate={{
               latitude: pickup.latitude,
               longitude: pickup.longitude,
             }}
             title="Pickup"
             description={pickup.address}
-          >
-            <View style={styles.pickupMarker}>
-              <View style={styles.pickupDot} />
-            </View>
-          </NativeMarker>
+            pinColor="#2457E6"
+          />
         )}
 
         {destination && (
-          <NativeMarker
+          <Marker
             coordinate={{
               latitude: destination.latitude,
               longitude: destination.longitude,
             }}
             title="Destination"
-            description={
-              destination.address
-            }
-          >
-            <View
-              style={styles.destinationMarker}
-            >
-              <View
-                style={styles.destinationDot}
-              />
-            </View>
-          </NativeMarker>
+            description={destination.address}
+            pinColor="#16845B"
+          />
         )}
 
-        {currentLocation &&
-          showCurrentLocation && (
-            <NativeMarker
-              coordinate={{
-                latitude:
-                  currentLocation.latitude,
-                longitude:
-                  currentLocation.longitude,
-              }}
-              title="Current location"
-            />
-          )}
+        {currentLocation && showCurrentLocation && (
+          <Marker
+            coordinate={{
+              latitude: currentLocation.latitude,
+              longitude: currentLocation.longitude,
+            }}
+            title="Your location"
+          />
+        )}
 
         {routeCoordinates.length > 1 && (
-          <NativePolyline
-            coordinates={routeCoordinates.map(
-              ([longitude, latitude]) => ({
-                latitude,
-                longitude,
-              })
-            )}
-            strokeWidth={5}
-            strokeColor="#2563EB"
+          <Polyline
+            coordinates={routeCoordinates}
+            strokeWidth={4}
+            strokeColor={colors.brand}
           />
         )}
-      </NativeMapView>
+      </MapView>
 
-      {routeLoading && (
-        <View style={styles.routeBadge}>
-          <ActivityIndicator
-            size="small"
-            color="#2563EB"
-          />
-
-          <Text style={styles.routeText}>
-            Calculating route...
+      {!mapReady && (
+        <View style={styles.badge}>
+          <ActivityIndicator color={colors.brand} size="small" />
+          <Text style={styles.badgeText}>
+            {mapError || "Loading map…"}
           </Text>
         </View>
       )}
 
-      {error && !routeLoading && (
-        <View style={styles.errorBadge}>
-          <Text style={styles.errorBadgeText}>
-            {error}
+      {mapReady && (locationLoading || routeLoading) && (
+        <View style={styles.badge}>
+          <ActivityIndicator color={colors.brand} size="small" />
+          <Text style={styles.badgeText}>
+            {routeLoading ? "Calculating route…" : "Finding your location…"}
           </Text>
+        </View>
+      )}
+
+      {!!locationError && !locationLoading && (
+        <View style={styles.message}>
+          <Text style={styles.messageText}>{locationError}</Text>
+        </View>
+      )}
+
+      {!!routeError && !routeLoading && (
+        <View style={styles.routeMessage}>
+          <Text style={styles.messageText}>{routeError}</Text>
         </View>
       )}
     </View>
@@ -369,111 +349,74 @@ export default function LocationMap({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    height: 250,
+    width: "100%",
     overflow: "hidden",
-    borderRadius: 20,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surfaceSecondary,
   },
-
   map: {
-    flex: 1,
+    ...StyleSheet.absoluteFill,
   },
-
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#F8FAFC",
-    padding: 24,
-  },
-
-  webFallback: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#E0ECFF",
-    padding: 24,
-  },
-
-  loading: {
-    marginTop: 12,
-    fontSize: 14,
-    color: "#64748B",
-  },
-
-  error: {
-    textAlign: "center",
-    fontSize: 15,
-    color: "#DC2626",
-  },
-
-  pickupMarker: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "#2563EB",
-  },
-
-  pickupDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#2563EB",
-  },
-
-  destinationMarker: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: "#111827",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  destinationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#FFFFFF",
-  },
-
-  routeBadge: {
+  badge: {
     position: "absolute",
-    top: 14,
+    top: spacing.sm,
     alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
     elevation: 3,
   },
-
-  routeText: {
-    marginLeft: 8,
+  badgeText: {
     fontSize: 12,
+    color: colors.text,
     fontWeight: "600",
-    color: "#334155",
   },
-
-  errorBadge: {
+  message: {
     position: "absolute",
-    left: 14,
-    right: 14,
-    bottom: 14,
-    backgroundColor: "#FFFFFF",
-    padding: 12,
-    borderRadius: 14,
-    elevation: 3,
+    bottom: spacing.sm,
+    left: spacing.sm,
+    right: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
   },
-
-  errorBadgeText: {
-    textAlign: "center",
+  messageText: {
     fontSize: 12,
-    color: "#DC2626",
+    color: colors.textSecondary,
+  },
+  routeMessage: {
+    position: "absolute",
+    top: spacing.sm,
+    left: spacing.sm,
+    right: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  fallback: {
+    height: 250,
+    padding: spacing.lg,
+    justifyContent: "center",
+    gap: spacing.sm,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  fallbackTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  fallbackText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
+  coordinates: {
+    color: colors.text,
+    fontSize: 12,
   },
 });

@@ -1,7 +1,13 @@
-import axios from "axios";
+import { create } from "axios";
 import { getStorageItem, deleteStorageItem } from "@/utils/storage";
 
-export const api = axios.create({
+let unauthorizedHandler: (() => void) | undefined;
+
+export function setUnauthorizedHandler(handler: () => void) {
+  unauthorizedHandler = handler;
+}
+
+export const api = create({
   baseURL: process.env.EXPO_PUBLIC_API_URL,
   timeout: 10000,
   headers: {
@@ -12,17 +18,9 @@ export const api = axios.create({
 api.interceptors.request.use(async (config) => {
   const token = await getStorageItem("shareride_auth_token");
 
-  console.log("========== API REQUEST ==========");
-  console.log("METHOD:", config.method?.toUpperCase());
-  console.log("URL:", `${config.baseURL}${config.url}`);
-  console.log("TOKEN EXISTS:", !!token);
-
   if (token) {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
-    console.log("AUTH HEADER ATTACHED: YES");
-  } else {
-    console.log("AUTH HEADER ATTACHED: NO");
   }
 
   return config;
@@ -40,10 +38,9 @@ api.interceptors.response.use(
       !url.includes("/api/auth/register")
     ) {
       await deleteStorageItem("shareride_auth_token");
-      console.log("AUTH TOKEN CLEARED AFTER 401");
+      unauthorizedHandler?.();
     }
 
     return Promise.reject(error);
   }
 );
-

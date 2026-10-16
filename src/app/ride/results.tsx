@@ -53,8 +53,7 @@ export default function RideResultsScreen() {
       });
 
       setRides(results);
-    } catch (err) {
-      console.error("FIND RIDES ERROR:", err);
+    } catch {
       setError("Unable to find rides right now.");
     } finally {
       setLoading(false);
@@ -107,6 +106,7 @@ export default function RideResultsScreen() {
             pathname: "/ride-details",
             params: {
               rideId: item.id.toString(),
+              requestedSeats: String(seats || 1),
             },
           })
         }
@@ -233,7 +233,7 @@ export default function RideResultsScreen() {
 
           <TouchableOpacity
             style={styles.offerButton}
-            onPress={() => router.push("/offer-ride")}
+            onPress={() => router.push("/(tabs)/offer-ride")}
           >
             <Text style={styles.offerText}>
               Offer a Ride

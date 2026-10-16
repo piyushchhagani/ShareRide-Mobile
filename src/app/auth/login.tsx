@@ -36,8 +36,6 @@ export default function LoginScreen() {
         password,
       });
 
-      console.log("LOGIN SCREEN SUCCESS:", response);
-
       setSession(response.token, {
         id: response.id,
         name: response.name,
@@ -47,12 +45,6 @@ export default function LoginScreen() {
 
       router.replace("/(tabs)/home");
     } catch (error: any) {
-      console.log("LOGIN SCREEN ERROR:", error);
-      console.log(
-        "LOGIN SCREEN RESPONSE:",
-        error?.response?.data
-      );
-
       const message =
         typeof error?.response?.data === "string"
           ? error.response.data

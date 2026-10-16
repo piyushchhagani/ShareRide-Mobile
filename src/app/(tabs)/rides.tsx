@@ -1,3 +1,4 @@
+
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,11 +12,36 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 
-import {
-  getMyRides,
-  Ride,
-} from "@/services/rides/ride.service";
+import { getMyRides, type Ride } from "@/services/rides/ride.service";
 import { goBackSafely } from "@/utils/navigation";
+import {
+  colors,
+  layout,
+  radius,
+  spacing,
+  typography,
+} from "@/theme/tokens";
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+
+  return date.toLocaleString([], {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function statusColors(status: string) {
+  if (status === "ACTIVE") {
+    return { background: colors.successSoft, text: colors.success };
+  }
+
+  return { background: colors.surfaceSecondary, text: colors.textSecondary };
+}
 
 export default function RidesScreen() {
   const [rides, setRides] = useState<Ride[]>([]);
@@ -23,40 +49,30 @@ export default function RidesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const loadRides = async () => {
+  const loadRides = useCallback(async () => {
     try {
       setError("");
-
       const data = await getMyRides();
-
       setRides(data);
-    } catch (requestError) {
-      console.error(
-        "MY RIDES ERROR:",
-        requestError
-      );
-
-      setError(
-        "Unable to load your rides."
-      );
+    } catch {
+      setError("Unable to load your rides. Please try again.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadRides();
-    }, [])
+      setLoading(true);
+      void loadRides();
+    }, [loadRides])
   );
 
-  const formatDate = (value: string) => {
-    return new Date(value).toLocaleString([], {
-      day: "numeric",
-      month: "short",
-      hour: "numeric",
-      minute: "2-digit",
+  const openRequests = (rideId: number) => {
+    router.push({
+      pathname: "/driver-requests",
+      params: { rideId: String(rideId) },
     });
   };
 
@@ -64,14 +80,8 @@ export default function RidesScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.center}>
-          <ActivityIndicator
-            size="large"
-            color="#2563EB"
-          />
-
-          <Text style={styles.loadingText}>
-            Loading your rides...
-          </Text>
+          <ActivityIndicator size="large" color={colors.brand} />
+          <Text style={styles.secondary}>Loading your rides…</Text>
         </View>
       </SafeAreaView>
     );
@@ -79,250 +89,145 @@ export default function RidesScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => goBackSafely()}
-        >
-          <Text style={styles.back}>
-            ‹ Back
-          </Text>
-        </TouchableOpacity>
+      <FlatList
+        data={rides}
+        keyExtractor={(item) => String(item.id)}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.list,
+          rides.length === 0 && styles.emptyList,
+        ]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            tintColor={colors.brand}
+            onRefresh={() => {
+              setRefreshing(true);
+              void loadRides();
+            }}
+          />
+        }
+        ListHeaderComponent={
+          <View style={styles.header}>
+            <TouchableOpacity
+              onPress={() => goBackSafely()}
+              style={styles.back}
+            >
+              <Text style={styles.backText}>‹  Back</Text>
+            </TouchableOpacity>
 
-        <Text style={styles.title}>
-          My Rides
-        </Text>
-
-        <Text style={styles.subtitle}>
-          Rides you&apos;ve offered
-        </Text>
-      </View>
-
-      {error ? (
-        <View style={styles.center}>
-          <Text style={styles.errorIcon}>
-            ⚠️
-          </Text>
-
-          <Text style={styles.emptyTitle}>
-            Something went wrong
-          </Text>
-
-          <Text style={styles.emptyText}>
-            {error}
-          </Text>
-
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={loadRides}
-          >
-            <Text style={styles.retryText}>
-              Try Again
+            <Text style={styles.eyebrow}>DRIVER DASHBOARD</Text>
+            <Text style={styles.title}>My rides</Text>
+            <Text style={styles.subtitle}>
+              Manage your offered rides and passenger requests.
             </Text>
-          </TouchableOpacity>
-        </View>
-      ) : rides.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyIcon}>
-            🚗
-          </Text>
 
-          <Text style={styles.emptyTitle}>
-            No rides offered yet
-          </Text>
-
-          <Text style={styles.emptyText}>
-            Offer a ride and passengers can
-            request seats from you.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.offerButton}
-            onPress={() =>
-              router.push(
-                "/(tabs)/offer-ride"
-              )
-            }
-          >
-            <Text style={styles.offerText}>
-              Offer a Ride
+            {!error && rides.length > 0 && (
+              <View style={styles.summary}>
+                <View>
+                  <Text style={styles.summaryNumber}>{rides.length}</Text>
+                  <Text style={styles.summaryLabel}>Rides offered</Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View>
+                  <Text style={styles.summaryNumber}>
+                    {rides.filter((ride) => ride.status === "ACTIVE").length}
+                  </Text>
+                  <Text style={styles.summaryLabel}>Active rides</Text>
+                </View>
+              </View>
+            )}
+          </View>
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyIcon}>{error ? "⚠️" : "🚘"}</Text>
+            <Text style={styles.emptyTitle}>
+              {error ? "Couldn't load your rides" : "Your rides start here"}
             </Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <FlatList
-          data={rides}
-          keyExtractor={(item) =>
-            item.id.toString()
-          }
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                loadRides();
+            <Text style={styles.secondary}>
+              {error ||
+                "Offer a ride to campus and let other students request a seat."}
+            </Text>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => {
+                if (error) {
+                  setLoading(true);
+                  void loadRides();
+                } else {
+                  router.push("/(tabs)/offer-ride");
+                }
               }}
-            />
-          }
-          renderItem={({ item }) => (
+            >
+              <Text style={styles.primaryText}>
+                {error ? "Try again" : "Offer a ride"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        }
+        renderItem={({ item }) => {
+          const status = statusColors(item.status);
+
+          return (
             <TouchableOpacity
               activeOpacity={0.88}
               style={styles.card}
-              onPress={() =>
-                router.push({
-                  pathname:
-                    "/driver-requests",
-                  params: {
-                    rideId:
-                      item.id.toString(),
-                  },
-                })
-              }
+              onPress={() => openRequests(item.id)}
             >
               <View style={styles.cardHeader}>
                 <View style={styles.carIcon}>
-                  <Text style={styles.carEmoji}>
-                    🚗
+                  <Text style={styles.carEmoji}>🚗</Text>
+                </View>
+
+                <View style={styles.cardHeading}>
+                  <Text style={styles.cardTitle}>Ride #{item.id}</Text>
+                  <Text style={styles.date}>
+                    {formatDate(item.departureTime)}
                   </Text>
                 </View>
 
-                <View
-                  style={styles.headerContent}
-                >
-                  <Text style={styles.rideTitle}>
-                    Ride #{item.id}
+                <View style={[styles.badge, { backgroundColor: status.background }]}>
+                  <Text style={[styles.badgeText, { color: status.text }]}>
+                    {item.status}
                   </Text>
-
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      item.status ===
-                        "ACTIVE" &&
-                        styles.activeBadge,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.statusText,
-                        item.status ===
-                          "ACTIVE" &&
-                          styles.activeText,
-                      ]}
-                    >
-                      {item.status}
-                    </Text>
-                  </View>
                 </View>
               </View>
 
               <View style={styles.route}>
-                <View style={styles.routeLine}>
-                  <View
-                    style={styles.pickupDot}
-                  />
-                  <View
-                    style={styles.verticalLine}
-                  />
-                  <View
-                    style={styles.destinationDot}
-                  />
+                <View style={styles.routeTrack}>
+                  <View style={styles.pickupDot} />
+                  <View style={styles.routeLine} />
+                  <View style={styles.destinationDot} />
                 </View>
 
-                <View
-                  style={styles.routeLabels}
-                >
-                  <View>
-                    <Text
-                      style={
-                        styles.routeLabel
-                      }
-                    >
-                      PICKUP
-                    </Text>
+                <View style={styles.routeText}>
+                  <Text style={styles.label}>PICKUP</Text>
+                  <Text style={styles.address}>{item.pickupAddress}</Text>
 
-                    <Text
-                      style={
-                        styles.address
-                      }
-                      numberOfLines={1}
-                    >
-                      {item.pickupAddress}
-                    </Text>
-                  </View>
-
-                  <View
-                    style={styles.destinationBlock}
-                  >
-                    <Text
-                      style={
-                        styles.routeLabel
-                      }
-                    >
-                      DESTINATION
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.address
-                      }
-                      numberOfLines={1}
-                    >
-                      {item.destinationAddress}
-                    </Text>
+                  <View style={styles.destinationBlock}>
+                    <Text style={styles.label}>DESTINATION</Text>
+                    <Text style={styles.address}>{item.destinationAddress}</Text>
                   </View>
                 </View>
               </View>
 
               <View style={styles.divider} />
 
-              <View style={styles.infoRow}>
-                <View style={styles.infoItem}>
-                  <Text
-                    style={styles.infoLabel}
-                  >
-                    DEPARTURE
-                  </Text>
-
-                  <Text
-                    style={styles.infoValue}
-                  >
-                    {formatDate(
-                      item.departureTime
-                    )}
-                  </Text>
-                </View>
-
-                <View style={styles.infoItem}>
-                  <Text
-                    style={styles.infoLabel}
-                  >
-                    SEATS
-                  </Text>
-
-                  <Text
-                    style={styles.infoValue}
-                  >
+              <View style={styles.bottomRow}>
+                <View>
+                  <Text style={styles.label}>SEATS AVAILABLE</Text>
+                  <Text style={styles.seatCount}>
                     {item.availableSeats}
                   </Text>
                 </View>
-              </View>
 
-              <View
-                style={styles.requestsButton}
-              >
-                <Text
-                  style={
-                    styles.requestsButtonText
-                  }
-                >
-                  View Passenger Requests →
-                </Text>
+                <Text style={styles.viewRequests}>Passenger requests  ›</Text>
               </View>
             </TouchableOpacity>
-          )}
-        />
-      )}
+          );
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -330,263 +235,234 @@ export default function RidesScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F7F9FC",
+    backgroundColor: colors.background,
   },
-
-  header: {
-    padding: 20,
-    paddingBottom: 12,
-  },
-
-  back: {
-    color: "#2563EB",
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 22,
-  },
-
-  title: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: "#111827",
-  },
-
-  subtitle: {
-    marginTop: 5,
-    color: "#64748B",
-  },
-
   list: {
-    padding: 20,
-    paddingTop: 10,
-    paddingBottom: 40,
+    padding: layout.screenPadding,
+    paddingBottom: spacing.xxl,
   },
-
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 15,
+  emptyList: {
+    flexGrow: 1,
+  },
+  header: {
+    marginBottom: spacing.lg,
+  },
+  back: {
+    alignSelf: "flex-start",
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.lg,
+  },
+  backText: {
+    color: colors.brand,
+    fontSize: typography.body,
+    fontWeight: "700",
+  },
+  eyebrow: {
+    color: colors.brand,
+    fontSize: typography.caption,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+  },
+  title: {
+    marginTop: spacing.xs,
+    color: colors.text,
+    fontSize: typography.screenTitle,
+    fontWeight: "800",
+  },
+  subtitle: {
+    marginTop: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: typography.body,
+    lineHeight: 21,
+  },
+  summary: {
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xl,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
-
+  summaryNumber: {
+    color: colors.text,
+    fontSize: typography.sectionTitle,
+    fontWeight: "800",
+  },
+  summaryLabel: {
+    marginTop: spacing.xxs,
+    color: colors.textSecondary,
+    fontSize: typography.caption,
+  },
+  summaryDivider: {
+    width: 1,
+    height: 34,
+    backgroundColor: colors.border,
+  },
+  card: {
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
+    gap: spacing.sm,
   },
-
   carIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
-    backgroundColor: "#EFF6FF",
+    width: 46,
+    height: 46,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandSoft,
     alignItems: "center",
     justifyContent: "center",
   },
-
   carEmoji: {
     fontSize: 21,
   },
-
-  headerContent: {
+  cardHeading: {
     flex: 1,
-    marginLeft: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    gap: spacing.xxs,
   },
-
-  rideTitle: {
-    fontSize: 17,
+  cardTitle: {
+    color: colors.text,
+    fontSize: typography.cardTitle,
     fontWeight: "800",
-    color: "#111827",
   },
-
-  statusBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: "#F1F5F9",
+  date: {
+    color: colors.textSecondary,
+    fontSize: typography.caption,
   },
-
-  activeBadge: {
-    backgroundColor: "#ECFDF5",
+  badge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
   },
-
-  statusText: {
-    fontSize: 10,
+  badgeText: {
+    fontSize: typography.caption,
     fontWeight: "800",
-    color: "#64748B",
   },
-
-  activeText: {
-    color: "#059669",
-  },
-
   route: {
     flexDirection: "row",
-    marginTop: 22,
+    marginTop: spacing.lg,
   },
-
-  routeLine: {
-    width: 20,
+  routeTrack: {
+    width: 18,
     alignItems: "center",
-    paddingTop: 5,
+    paddingTop: 4,
   },
-
   pickupDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 12,
+    height: 12,
+    borderRadius: radius.pill,
     borderWidth: 3,
-    borderColor: "#2563EB",
-    backgroundColor: "#FFFFFF",
+    borderColor: colors.brand,
+    backgroundColor: colors.surface,
   },
-
-  verticalLine: {
-    width: 1,
-    height: 37,
-    backgroundColor: "#CBD5E1",
+  routeLine: {
+    width: 2,
+    height: 38,
+    backgroundColor: colors.border,
   },
-
   destinationDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
-    backgroundColor: "#2563EB",
+    borderRadius: 3,
+    backgroundColor: colors.text,
   },
-
-  routeLabels: {
+  routeText: {
     flex: 1,
-    marginLeft: 8,
+    marginLeft: spacing.sm,
   },
-
-  routeLabel: {
-    fontSize: 10,
+  label: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
     fontWeight: "800",
-    color: "#94A3B8",
+    letterSpacing: 0.6,
   },
-
   address: {
-    marginTop: 3,
-    fontSize: 14,
+    marginTop: spacing.xxs,
+    color: colors.text,
+    fontSize: typography.body,
+    lineHeight: 20,
     fontWeight: "600",
-    color: "#1E293B",
   },
-
   destinationBlock: {
-    marginTop: 20,
+    marginTop: spacing.lg,
   },
-
   divider: {
     height: 1,
-    backgroundColor: "#E2E8F0",
-    marginVertical: 16,
+    backgroundColor: colors.divider,
+    marginVertical: spacing.md,
   },
-
-  infoRow: {
+  bottomRow: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
+    gap: spacing.sm,
   },
-
-  infoItem: {
-    flex: 1,
-  },
-
-  infoLabel: {
-    fontSize: 10,
+  seatCount: {
+    marginTop: spacing.xxs,
+    color: colors.text,
+    fontSize: typography.bodyLarge,
     fontWeight: "800",
-    color: "#94A3B8",
   },
-
-  infoValue: {
-    marginTop: 4,
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#111827",
+  viewRequests: {
+    color: colors.brand,
+    fontSize: typography.caption,
+    fontWeight: "800",
   },
-
-  requestsButton: {
-    marginTop: 17,
-    height: 44,
-    borderRadius: 13,
-    backgroundColor: "#EFF6FF",
+  emptyCard: {
+    flex: 1,
+    minHeight: 270,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.xl,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm,
+  },
+  emptyIcon: {
+    fontSize: 42,
+  },
+  emptyTitle: {
+    color: colors.text,
+    fontSize: typography.sectionTitle,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  secondary: {
+    color: colors.textSecondary,
+    fontSize: typography.body,
+    lineHeight: 21,
+    textAlign: "center",
+  },
+  primaryButton: {
+    minHeight: layout.buttonHeight,
+    alignSelf: "stretch",
+    marginTop: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.brand,
     alignItems: "center",
     justifyContent: "center",
   },
-
-  requestsButtonText: {
-    color: "#2563EB",
+  primaryText: {
+    color: colors.white,
+    fontSize: typography.button,
     fontWeight: "800",
-    fontSize: 13,
   },
-
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 30,
-  },
-
-  loadingText: {
-    marginTop: 12,
-    color: "#64748B",
-  },
-
-  empty: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 35,
-  },
-
-  emptyIcon: {
-    fontSize: 50,
-  },
-
-  emptyTitle: {
-    marginTop: 18,
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#111827",
-    textAlign: "center",
-  },
-
-  emptyText: {
-    marginTop: 8,
-    color: "#64748B",
-    textAlign: "center",
-    lineHeight: 20,
-  },
-
-  offerButton: {
-    marginTop: 24,
-    paddingHorizontal: 28,
-    paddingVertical: 15,
-    backgroundColor: "#2563EB",
-    borderRadius: 16,
-  },
-
-  offerText: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-  },
-
-  errorIcon: {
-    fontSize: 45,
-  },
-
-  retryButton: {
-    marginTop: 20,
-    paddingHorizontal: 25,
-    paddingVertical: 13,
-    backgroundColor: "#2563EB",
-    borderRadius: 15,
-  },
-
-  retryText: {
-    color: "#FFFFFF",
-    fontWeight: "800",
+    padding: spacing.xl,
+    gap: spacing.sm,
   },
 });

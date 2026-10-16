@@ -1,3 +1,4 @@
+
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -10,332 +11,226 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  router,
-  useFocusEffect,
-  useLocalSearchParams,
-} from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 
 import {
   getRideRequests,
-  RideRequest,
+  type RideRequest,
   updateRideRequest,
 } from "@/services/rides/request.service";
+import { goBackSafely } from "@/utils/navigation";
+import {
+  colors,
+  layout,
+  radius,
+  spacing,
+  typography,
+} from "@/theme/tokens";
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+
+  return date.toLocaleString([], {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 export default function DriverRequestsScreen() {
-  const { rideId } = useLocalSearchParams<{
-    rideId?: string;
-  }>();
+  const { rideId } = useLocalSearchParams<{ rideId?: string }>();
 
   const [requests, setRequests] = useState<RideRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [processing, setProcessing] = useState<number | null>(
-    null
-  );
+  const [processing, setProcessing] = useState<number | null>(null);
   const [error, setError] = useState("");
 
-  const loadRequests = async () => {
-    if (!rideId) {
+  const loadRequests = useCallback(async () => {
+    if (!rideId || !Number.isFinite(Number(rideId))) {
+      setError("A valid ride ID is required.");
       setLoading(false);
-      setError("Ride not found.");
+      setRefreshing(false);
       return;
     }
 
     try {
       setError("");
-
-      const data = await getRideRequests(
-        Number(rideId)
-      );
-
+      const data = await getRideRequests(Number(rideId));
       setRequests(data);
     } catch (requestError: any) {
-      console.log(
-        "DRIVER REQUESTS ERROR:",
-        requestError
-      );
-
+      const data = requestError?.response?.data;
       setError(
-        requestError?.response?.data ||
-          "Unable to load ride requests."
+        typeof data === "string"
+          ? data
+          : data?.message || "Unable to load ride requests."
       );
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [rideId]);
 
   useFocusEffect(
     useCallback(() => {
-      loadRequests();
-    }, [rideId])
+      setLoading(true);
+      void loadRequests();
+    }, [loadRequests])
   );
 
   const respond = async (
     requestId: number,
     action: "ACCEPT" | "REJECT"
   ) => {
-    if (processing !== null) {
-      return;
-    }
-
-    console.log(
-      "DRIVER REQUEST ACTION:",
-      action,
-      "requestId:",
-      requestId,
-      "rideId:",
-      rideId
-    );
+    if (processing !== null) return;
 
     try {
       setProcessing(requestId);
 
-      const updatedRequest =
-        await updateRideRequest(
-          requestId,
-          action
-        );
-
-      console.log(
-        "DRIVER REQUEST UPDATED:",
-        updatedRequest
-      );
+      const updated = await updateRideRequest(requestId, action);
 
       setRequests((current) =>
-        current.map((request) =>
-          request.id === requestId
-            ? updatedRequest
-            : request
+        current.map((item) =>
+          item.id === requestId ? updated : item
         )
       );
 
       Alert.alert(
+        action === "ACCEPT" ? "Request accepted" : "Request rejected",
         action === "ACCEPT"
-          ? "Ride Accepted"
-          : "Request Rejected",
-        action === "ACCEPT"
-          ? "The passenger has been added to the ride."
-          : "The passenger request was rejected."
+          ? "The passenger request has been accepted."
+          : "The passenger request has been rejected."
       );
 
       await loadRequests();
     } catch (requestError: any) {
-      console.log(
-        "DRIVER REQUEST ACTION ERROR:",
-        requestError
-      );
-
-      console.log(
-        "STATUS:",
-        requestError?.response?.status
-      );
-
-      console.log(
-        "DATA:",
-        requestError?.response?.data
-      );
-
+      const data = requestError?.response?.data;
       Alert.alert(
-        "Unable to update",
-        String(
-          requestError?.response?.data ||
-            requestError?.message ||
-            "Unable to process this request."
-        )
+        "Unable to update request",
+        typeof data === "string"
+          ? data
+          : data?.message || "Please try again."
       );
     } finally {
       setProcessing(null);
     }
   };
 
+  const pendingCount = requests.filter(
+    (item) => item.status === "PENDING"
+  ).length;
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
         <View style={styles.center}>
-          <ActivityIndicator
-            size="large"
-            color="#2563EB"
-          />
-
-          <Text style={styles.loadingText}>
-            Loading requests...
-          </Text>
+          <ActivityIndicator size="large" color={colors.brand} />
+          <Text style={styles.secondary}>Loading ride requests…</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => goBackSafely("/(tabs)/rides")}
+          style={styles.back}
         >
-          <Text style={styles.back}>
-            ‹ Back
-          </Text>
+          <Text style={styles.backText}>‹ Back</Text>
         </TouchableOpacity>
 
-        <View style={styles.headerCenter}>
-          <Text style={styles.title}>
-            Ride Requests
-          </Text>
-
-          <Text style={styles.rideLabel}>
-            Ride #{rideId}
-          </Text>
-        </View>
-
-        <View style={styles.headerSpacer} />
+        <Text style={styles.eyebrow}>DRIVER DASHBOARD</Text>
+        <Text style={styles.title}>Ride requests</Text>
+        <Text style={styles.subtitle}>
+          Ride #{rideId || "—"} · {pendingCount} pending
+        </Text>
       </View>
 
       {error ? (
         <View style={styles.center}>
-          <Text style={styles.errorIcon}>
-            ⚠️
-          </Text>
-
-          <Text style={styles.emptyTitle}>
-            Unable to load requests
-          </Text>
-
-          <Text style={styles.emptyText}>
-            {error}
-          </Text>
-
+          <Text style={styles.stateIcon}>⚠️</Text>
+          <Text style={styles.stateTitle}>Couldn't load requests</Text>
+          <Text style={styles.secondary}>{error}</Text>
           <TouchableOpacity
-            style={styles.retryButton}
-            onPress={loadRequests}
+            style={styles.primaryButton}
+            onPress={() => {
+              setLoading(true);
+              void loadRequests();
+            }}
           >
-            <Text style={styles.retryText}>
-              Try Again
-            </Text>
+            <Text style={styles.primaryText}>Try again</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
           data={requests}
-          keyExtractor={(item) =>
-            item.id.toString()
-          }
-          showsVerticalScrollIndicator={false}
+          keyExtractor={(item) => String(item.id)}
           contentContainerStyle={[
             styles.list,
-            requests.length === 0 &&
-              styles.emptyList,
+            requests.length === 0 && styles.emptyList,
           ]}
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
+              tintColor={colors.brand}
               onRefresh={() => {
                 setRefreshing(true);
-                loadRequests();
+                void loadRequests();
               }}
             />
           }
-          ListHeaderComponent={
-            requests.length > 0 ? (
-              <View style={styles.summary}>
-                <Text style={styles.summaryTitle}>
-                  Passenger Requests
-                </Text>
-
-                <Text style={styles.summaryText}>
-                  {
-                    requests.filter(
-                      (item) =>
-                        item.status ===
-                        "PENDING"
-                    ).length
-                  }{" "}
-                  pending request
-                  {requests.filter(
-                    (item) =>
-                      item.status ===
-                      "PENDING"
-                  ).length !== 1
-                    ? "s"
-                    : ""}
-                </Text>
-              </View>
-            ) : null
-          }
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text style={styles.emptyIcon}>
-                🎉
-              </Text>
-
-              <Text style={styles.emptyTitle}>
-                No requests yet
-              </Text>
-
-              <Text style={styles.emptyText}>
-                Passenger requests for this
-                ride will appear here.
+              <Text style={styles.stateIcon}>🚘</Text>
+              <Text style={styles.stateTitle}>No requests yet</Text>
+              <Text style={styles.secondary}>
+                Passenger requests for this ride will appear here.
               </Text>
             </View>
           }
           renderItem={({ item }) => {
-            const isProcessing =
-              processing === item.id;
+            const isPending = item.status === "PENDING";
+            const isAccepted = item.status === "ACCEPTED";
+            const busy = processing === item.id;
+
+            const statusColor = isAccepted
+              ? colors.success
+              : item.status === "REJECTED"
+                ? colors.danger
+                : colors.warning;
+
+            const statusBackground = isAccepted
+              ? colors.successSoft
+              : item.status === "REJECTED"
+                ? colors.dangerSoft
+                : colors.warningSoft;
 
             return (
               <View style={styles.card}>
                 <View style={styles.cardTop}>
                   <View style={styles.avatar}>
-                    <Text
-                      style={styles.avatarText}
-                    >
-                      {item.passengerName
-                        ?.charAt(0)
-                        .toUpperCase() || "P"}
+                    <Text style={styles.avatarText}>
+                      {item.passengerName?.charAt(0).toUpperCase() || "P"}
                     </Text>
                   </View>
 
-                  <View
-                    style={styles.passengerInfo}
-                  >
+                  <View style={styles.passenger}>
                     <Text style={styles.name}>
-                      {item.passengerName ||
-                        "Passenger"}
+                      {item.passengerName || "Passenger"}
                     </Text>
-
-                    <Text
-                      style={styles.requested}
-                    >
-                      Requested{" "}
-                      {item.requestedSeats} seat
-                      {item.requestedSeats > 1
-                        ? "s"
-                        : ""}
+                    <Text style={styles.secondary}>
+                      {item.requestedSeats}{" "}
+                      {item.requestedSeats === 1 ? "seat" : "seats"} requested
                     </Text>
                   </View>
 
-                  <View
-                    style={[
-                      styles.status,
-                      item.status ===
-                        "ACCEPTED" &&
-                        styles.acceptedStatus,
-                      item.status ===
-                        "REJECTED" &&
-                        styles.rejectedStatus,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.statusText,
-                        item.status ===
-                          "ACCEPTED" &&
-                          styles.acceptedStatusText,
-                        item.status ===
-                          "REJECTED" &&
-                          styles.rejectedStatusText,
-                      ]}
-                    >
+                  <View style={[styles.badge, { backgroundColor: statusBackground }]}>
+                    <Text style={[styles.badgeText, { color: statusColor }]}>
                       {item.status}
                     </Text>
                   </View>
@@ -343,88 +238,49 @@ export default function DriverRequestsScreen() {
 
                 <View style={styles.divider} />
 
-                <Text
-                  style={styles.requestDate}
-                >
-                  Requested{" "}
-                  {new Date(
-                    item.createdAt
-                  ).toLocaleString([], {
-                    day: "numeric",
-                    month: "short",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
+                <Text style={styles.date}>
+                  Requested {formatDate(item.createdAt)}
                 </Text>
 
-                {item.status === "PENDING" ? (
+                {isPending ? (
                   <View style={styles.actions}>
                     <TouchableOpacity
-                      style={styles.reject}
-                      disabled={isProcessing}
-                      onPress={() =>
-                        respond(
-                          item.id,
-                          "REJECT"
-                        )
-                      }
+                      disabled={processing !== null}
+                      style={[
+                        styles.actionButton,
+                        styles.rejectButton,
+                        processing !== null && styles.disabled,
+                      ]}
+                      onPress={() => void respond(item.id, "REJECT")}
                     >
-                      {isProcessing ? (
-                        <ActivityIndicator
-                          color="#DC2626"
-                        />
+                      {busy ? (
+                        <ActivityIndicator color={colors.danger} />
                       ) : (
-                        <Text
-                          style={
-                            styles.rejectText
-                          }
-                        >
-                          Reject
-                        </Text>
+                        <Text style={styles.rejectText}>Reject</Text>
                       )}
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={styles.accept}
-                      disabled={isProcessing}
-                      onPress={() =>
-                        respond(
-                          item.id,
-                          "ACCEPT"
-                        )
-                      }
+                      disabled={processing !== null}
+                      style={[
+                        styles.actionButton,
+                        styles.acceptButton,
+                        processing !== null && styles.disabled,
+                      ]}
+                      onPress={() => void respond(item.id, "ACCEPT")}
                     >
-                      {isProcessing ? (
-                        <ActivityIndicator
-                          color="#FFFFFF"
-                        />
+                      {busy ? (
+                        <ActivityIndicator color={colors.white} />
                       ) : (
-                        <Text
-                          style={
-                            styles.acceptText
-                          }
-                        >
-                          Accept
-                        </Text>
+                        <Text style={styles.acceptText}>Accept request</Text>
                       )}
                     </TouchableOpacity>
                   </View>
                 ) : (
-                  <Text
-                    style={[
-                      styles.completedText,
-                      item.status ===
-                        "ACCEPTED" &&
-                        styles.completedAccepted,
-                      item.status ===
-                        "REJECTED" &&
-                        styles.completedRejected,
-                    ]}
-                  >
-                    {item.status ===
-                    "ACCEPTED"
-                      ? "Passenger accepted for this ride."
-                      : "Request has been rejected."}
+                  <Text style={[styles.finalStatus, { color: statusColor }]}>
+                    {isAccepted
+                      ? "This passenger request has been accepted."
+                      : "This request is no longer pending."}
                   </Text>
                 )}
               </View>
@@ -437,253 +293,177 @@ export default function DriverRequestsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: "#F7F9FC",
+    backgroundColor: colors.background,
   },
-
   header: {
-    minHeight: 72,
-    paddingHorizontal: 18,
-    backgroundColor: "#FFFFFF",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    padding: layout.screenPadding,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: colors.border,
   },
-
   back: {
-    color: "#2563EB",
-    fontSize: 17,
+    alignSelf: "flex-start",
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  backText: {
+    color: colors.brand,
+    fontSize: typography.body,
     fontWeight: "700",
   },
-
-  headerCenter: {
-    alignItems: "center",
-  },
-
-  title: {
-    fontSize: 19,
+  eyebrow: {
+    color: colors.brand,
+    fontSize: typography.caption,
     fontWeight: "800",
-    color: "#0F172A",
+    letterSpacing: 1.2,
   },
-
-  rideLabel: {
-    marginTop: 2,
-    fontSize: 12,
-    color: "#64748B",
+  title: {
+    marginTop: spacing.xs,
+    color: colors.text,
+    fontSize: typography.screenTitle,
+    fontWeight: "800",
   },
-
-  headerSpacer: {
-    width: 50,
+  subtitle: {
+    marginTop: spacing.xs,
+    color: colors.textSecondary,
+    fontSize: typography.body,
   },
-
   list: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: layout.screenPadding,
+    paddingBottom: spacing.xxl,
   },
-
   emptyList: {
     flexGrow: 1,
   },
-
-  summary: {
-    marginBottom: 14,
-  },
-
-  summaryTitle: {
-    fontSize: 21,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-
-  summaryText: {
-    marginTop: 4,
-    color: "#64748B",
-    fontSize: 13,
-  },
-
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 14,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
-
   cardTop: {
     flexDirection: "row",
     alignItems: "center",
+    gap: spacing.sm,
   },
-
   avatar: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: "#DBEAFE",
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSoft,
     alignItems: "center",
     justifyContent: "center",
   },
-
   avatarText: {
-    fontSize: 18,
+    color: colors.brand,
+    fontSize: typography.bodyLarge,
     fontWeight: "800",
-    color: "#2563EB",
   },
-
-  passengerInfo: {
+  passenger: {
     flex: 1,
-    marginLeft: 12,
+    gap: spacing.xxs,
   },
-
   name: {
-    fontSize: 17,
+    color: colors.text,
+    fontSize: typography.cardTitle,
     fontWeight: "800",
-    color: "#0F172A",
   },
-
-  requested: {
-    marginTop: 4,
-    color: "#64748B",
-    fontSize: 13,
+  secondary: {
+    color: colors.textSecondary,
+    fontSize: typography.body,
+    textAlign: "center",
+    lineHeight: 21,
   },
-
-  status: {
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: "#EFF6FF",
+  badge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
   },
-
-  acceptedStatus: {
-    backgroundColor: "#ECFDF5",
-  },
-
-  rejectedStatus: {
-    backgroundColor: "#FEF2F2",
-  },
-
-  statusText: {
-    fontSize: 10,
+  badgeText: {
+    fontSize: typography.caption,
     fontWeight: "800",
-    color: "#2563EB",
   },
-
-  acceptedStatusText: {
-    color: "#059669",
-  },
-
-  rejectedStatusText: {
-    color: "#DC2626",
-  },
-
   divider: {
     height: 1,
-    backgroundColor: "#E2E8F0",
-    marginVertical: 15,
+    backgroundColor: colors.divider,
+    marginVertical: spacing.md,
   },
-
-  requestDate: {
-    fontSize: 12,
-    color: "#94A3B8",
+  date: {
+    color: colors.textSecondary,
+    fontSize: typography.caption,
   },
-
   actions: {
     flexDirection: "row",
-    gap: 10,
-    marginTop: 16,
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
-
-  reject: {
+  actionButton: {
     flex: 1,
-    height: 46,
-    borderRadius: 13,
+    minHeight: layout.buttonHeight - 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rejectButton: {
     borderWidth: 1,
-    borderColor: "#DC2626",
-    alignItems: "center",
-    justifyContent: "center",
+    borderColor: colors.danger,
+    backgroundColor: colors.surface,
   },
-
   rejectText: {
-    color: "#DC2626",
+    color: colors.danger,
+    fontSize: typography.button,
     fontWeight: "800",
   },
-
-  accept: {
-    flex: 1,
-    height: 46,
-    borderRadius: 13,
-    backgroundColor: "#2563EB",
-    alignItems: "center",
-    justifyContent: "center",
+  acceptButton: {
+    backgroundColor: colors.brand,
   },
-
   acceptText: {
-    color: "#FFFFFF",
+    color: colors.white,
+    fontSize: typography.button,
     fontWeight: "800",
   },
-
-  completedText: {
-    marginTop: 15,
-    fontSize: 13,
+  disabled: {
+    opacity: 0.6,
+  },
+  finalStatus: {
+    marginTop: spacing.md,
+    fontSize: typography.body,
     fontWeight: "700",
   },
-
-  completedAccepted: {
-    color: "#059669",
-  },
-
-  completedRejected: {
-    color: "#DC2626",
-  },
-
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 28,
+    padding: spacing.xl,
+    gap: spacing.sm,
   },
-
-  loadingText: {
-    marginTop: 10,
-    color: "#64748B",
+  stateIcon: {
+    fontSize: 42,
   },
-
-  emptyIcon: {
-    fontSize: 48,
-  },
-
-  errorIcon: {
-    fontSize: 44,
-  },
-
-  emptyTitle: {
-    marginTop: 15,
-    fontSize: 21,
+  stateTitle: {
+    color: colors.text,
+    fontSize: typography.sectionTitle,
     fontWeight: "800",
-    color: "#0F172A",
     textAlign: "center",
   },
-
-  emptyText: {
-    marginTop: 7,
-    textAlign: "center",
-    color: "#64748B",
-    lineHeight: 20,
+  primaryButton: {
+    minHeight: layout.buttonHeight,
+    alignSelf: "stretch",
+    marginTop: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.brand,
+    alignItems: "center",
+    justifyContent: "center",
   },
-
-  retryButton: {
-    marginTop: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 13,
-    borderRadius: 14,
-    backgroundColor: "#2563EB",
-  },
-
-  retryText: {
-    color: "#FFFFFF",
+  primaryText: {
+    color: colors.white,
+    fontSize: typography.button,
     fontWeight: "800",
   },
 });

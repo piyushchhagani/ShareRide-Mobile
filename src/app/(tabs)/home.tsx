@@ -1,441 +1,526 @@
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React from "react";
+import {
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 
-const recentPlaces = [
-  "University",
-  "Railway Station",
-  "Airport",
-];
-
-const popularPlaces = [
-  {
-    title: "University",
-    subtitle: "Campus",
-    icon: "🎓",
-  },
-  {
-    title: "Railway Station",
-    subtitle: "Transit",
-    icon: "🚆",
-  },
-  {
-    title: "Airport",
-    subtitle: "Travel",
-    icon: "✈️",
-  },
-];
+import {
+  colors,
+  radius,
+  spacing,
+  typography,
+} from "../../theme/tokens";
 
 export default function HomeScreen() {
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Good morning 👋</Text>
-            <Text style={styles.name}>Where are you going?</Text>
+        {/* Brand and profile */}
+        <View style={styles.topBar}>
+          <View style={styles.brandRow}>
+            <View style={styles.logo}>
+              <Text style={styles.logoGlyph}>S</Text>
+            </View>
+
+            <View>
+              <Text style={styles.brand}>ShareRide</Text>
+              <Text style={styles.brandSubtitle}>CAMPUS MOBILITY</Text>
+            </View>
           </View>
 
-          <TouchableOpacity
-            style={styles.notification}
-            onPress={() => router.push("/notifications")}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open profile"
+            onPress={() => router.push("/(tabs)/profile")}
+            style={({ pressed }) => [
+              styles.profileButton,
+              pressed && styles.pressed,
+            ]}
           >
-            <Text style={styles.notificationIcon}>🔔</Text>
-            <View style={styles.notificationDot} />
-          </TouchableOpacity>
+            <Text style={styles.profileGlyph}>♙</Text>
+          </Pressable>
         </View>
 
-        {/* Search */}
-        <TouchableOpacity
-          style={styles.search}
-          activeOpacity={0.8}
+        {/* Welcome */}
+        <View style={styles.welcome}>
+          <View style={styles.eyebrow}>
+            <View style={styles.statusDot} />
+            <Text style={styles.eyebrowText}>YOUR CAMPUS, CONNECTED</Text>
+          </View>
+
+          <Text style={styles.heading}>
+            Where are you{"\n"}
+            <Text style={styles.headingAccent}>heading today?</Text>
+          </Text>
+
+          <Text style={styles.description}>
+            Share a ride, meet your campus community, and make every journey
+            easier.
+          </Text>
+        </View>
+
+        {/* Main actions */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Plan your journey</Text>
+          <Text style={styles.sectionCaption}>CHOOSE AN ACTION</Text>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
           onPress={() => router.push("/(tabs)/find-ride")}
+          style={({ pressed }) => [
+            styles.findCard,
+            pressed && styles.pressed,
+          ]}
         >
-          <Text style={styles.searchIcon}>⌕</Text>
+          <View style={styles.cardTopRow}>
+            <View style={styles.findIcon}>
+              <Text style={styles.findIconText}>⌕</Text>
+            </View>
 
-          <View>
-            <Text style={styles.searchTitle}>Where are you going?</Text>
-            <Text style={styles.searchSubtitle}>
-              Find a ride with students
-            </Text>
+            <View style={styles.actionBadge}>
+              <Text style={styles.actionBadgeText}>PASSENGER</Text>
+            </View>
           </View>
-        </TouchableOpacity>
 
-        {/* Map / Location toggle */}
-        <View style={styles.toggleContainer}>
-          <TouchableOpacity style={styles.toggleActive}>
-            <Text style={styles.toggleActiveText}>📍 Location</Text>
-          </TouchableOpacity>
+          <View style={styles.cardBottomRow}>
+            <View style={styles.cardCopy}>
+              <Text style={styles.findTitle}>Find a ride</Text>
+              <Text style={styles.findDescription}>
+                Discover rides going your way.
+              </Text>
+            </View>
 
-          <TouchableOpacity style={styles.toggle}>
-            <Text style={styles.toggleText}>🗺 Map</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.findArrowCircle}>
+              <Text style={styles.findArrow}>↗</Text>
+            </View>
+          </View>
+        </Pressable>
 
-        {/* Recent */}
-        <SectionHeader title="Recent searches" />
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.horizontalList}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/(tabs)/offer-ride")}
+          style={({ pressed }) => [
+            styles.offerCard,
+            pressed && styles.pressed,
+          ]}
         >
-          {recentPlaces.map((place) => (
-            <TouchableOpacity
-              key={place}
-              style={styles.recentCard}
-              onPress={() => router.push("/(tabs)/find-ride")}
-            >
-              <Text style={styles.recentIcon}>↗</Text>
-              <Text style={styles.recentText}>{place}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+          <View style={styles.cardTopRow}>
+            <View style={styles.offerIcon}>
+              <Text style={styles.offerIconText}>↗</Text>
+            </View>
 
-        {/* Popular */}
-        <SectionHeader title="Popular places" />
+            <View style={styles.offerBadge}>
+              <Text style={styles.offerBadgeText}>DRIVER</Text>
+            </View>
+          </View>
 
-        <View style={styles.popularGrid}>
-          {popularPlaces.map((place) => (
-            <TouchableOpacity
-              key={place.title}
-              style={styles.placeCard}
-              onPress={() => router.push("/(tabs)/find-ride")}
-            >
-              <View style={styles.placeIcon}>
-                <Text style={styles.placeIconText}>{place.icon}</Text>
-              </View>
+          <View style={styles.cardBottomRow}>
+            <View style={styles.cardCopy}>
+              <Text style={styles.offerTitle}>Offer a ride</Text>
+              <Text style={styles.offerDescription}>
+                Share your journey with others.
+              </Text>
+            </View>
 
-              <Text style={styles.placeTitle}>{place.title}</Text>
-              <Text style={styles.placeSubtitle}>{place.subtitle}</Text>
-            </TouchableOpacity>
-          ))}
+            <View style={styles.offerArrowCircle}>
+              <Text style={styles.offerArrow}>↗</Text>
+            </View>
+          </View>
+        </Pressable>
+
+        {/* Shortcuts */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Your ShareRide</Text>
         </View>
 
-        {/* Explore */}
-        <SectionHeader title="Explore more" />
-
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => router.push("/(tabs)/find-ride")}
+        <View style={styles.shortcuts}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/(tabs)/bookings")}
+            style={({ pressed }) => [
+              styles.shortcutCard,
+              pressed && styles.pressed,
+            ]}
           >
-            <Text style={styles.actionIcon}>🔎</Text>
-            <Text style={styles.actionTitle}>Find Ride</Text>
-            <Text style={styles.actionSubtitle}>
-              Find someone going your way
+            <View style={styles.shortcutIcon}>
+              <Text style={styles.shortcutGlyph}>▤</Text>
+            </View>
+            <Text style={styles.shortcutTitle}>My bookings</Text>
+            <Text style={styles.shortcutDescription}>
+              View your ride requests
             </Text>
-          </TouchableOpacity>
+            <Text style={styles.shortcutArrow}>→</Text>
+          </Pressable>
 
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => router.push("/(tabs)/offer-ride")}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/(tabs)/rides")}
+            style={({ pressed }) => [
+              styles.shortcutCard,
+              pressed && styles.pressed,
+            ]}
           >
-            <Text style={styles.actionIcon}>🚗</Text>
-            <Text style={styles.actionTitle}>Offer Ride</Text>
-            <Text style={styles.actionSubtitle}>
-              Share your journey
+            <View style={styles.shortcutIcon}>
+              <Text style={styles.shortcutGlyph}>↗</Text>
+            </View>
+            <Text style={styles.shortcutTitle}>My rides</Text>
+            <Text style={styles.shortcutDescription}>
+              Manage your journeys
             </Text>
-          </TouchableOpacity>
+            <Text style={styles.shortcutArrow}>→</Text>
+          </Pressable>
         </View>
 
-        {/* Go places */}
-        <SectionHeader title="Go places with ShareRide" />
-
-        <View style={styles.banner}>
-          <Text style={styles.bannerTitle}>
-            Your campus. Your community.
+        {/* Footer note */}
+        <View style={styles.footer}>
+          <View style={styles.footerIcon}>
+            <Text style={styles.footerIconText}>✓</Text>
+          </View>
+          <Text style={styles.footerText}>
+            Better journeys begin together.
           </Text>
-
-          <Text style={styles.bannerText}>
-            Share rides, save money and travel together.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.bannerButton}
-            onPress={() => router.push("/(tabs)/find-ride")}
-          >
-            <Text style={styles.bannerButtonText}>
-              Find a ride →
-            </Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <Text style={styles.seeAll}>See all</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
   },
-
   content: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: 36,
   },
-
-  header: {
-    marginTop: 8,
+  topBar: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 36,
   },
-
-  greeting: {
-    fontSize: 14,
-    color: "#64748B",
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
   },
-
-  name: {
-    marginTop: 5,
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-
-  notification: {
+  logo: {
     width: 46,
     height: 46,
-    borderRadius: 23,
-    backgroundColor: "#FFFFFF",
+    borderRadius: 15,
+    backgroundColor: colors.brand,
     alignItems: "center",
     justifyContent: "center",
   },
-
-  notificationIcon: {
-    fontSize: 21,
+  logoGlyph: {
+    color: colors.white,
+    fontSize: 25,
+    fontWeight: "900",
   },
-
-  notificationDot: {
-    position: "absolute",
-    top: 9,
-    right: 10,
+  brand: {
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  brandSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1.5,
+    marginTop: 3,
+  },
+  profileButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  profileGlyph: {
+    color: colors.brand,
+    fontSize: 26,
+  },
+  welcome: {
+    marginBottom: 30,
+  },
+  eyebrow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 15,
+  },
+  statusDot: {
     width: 7,
     height: 7,
-    borderRadius: 4,
-    backgroundColor: "#EF4444",
+    borderRadius: radius.pill,
+    backgroundColor: colors.success,
   },
-
-  search: {
-    marginTop: 24,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    minHeight: 72,
-    paddingHorizontal: 18,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  searchIcon: {
-    fontSize: 30,
-    color: "#2563EB",
-    marginRight: 14,
-  },
-
-  searchTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-
-  searchSubtitle: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "#94A3B8",
-  },
-
-  toggleContainer: {
-    marginTop: 12,
-    backgroundColor: "#E2E8F0",
-    borderRadius: 14,
-    padding: 4,
-    flexDirection: "row",
-  },
-
-  toggleActive: {
-    flex: 1,
-    paddingVertical: 11,
-    borderRadius: 11,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-  },
-
-  toggleActiveText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#2563EB",
-  },
-
-  toggle: {
-    flex: 1,
-    paddingVertical: 11,
-    alignItems: "center",
-  },
-
-  toggleText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#64748B",
-  },
-
-  sectionHeader: {
-    marginTop: 28,
-    marginBottom: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  sectionTitle: {
-    fontSize: 18,
+  eyebrowText: {
+    color: colors.textSecondary,
+    fontSize: 10,
     fontWeight: "800",
-    color: "#0F172A",
+    letterSpacing: 1.4,
   },
-
-  seeAll: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#2563EB",
+  heading: {
+    color: colors.text,
+    fontSize: 34,
+    lineHeight: 41,
+    fontWeight: "800",
+    letterSpacing: -1.2,
   },
-
-  horizontalList: {
-    gap: 10,
+  headingAccent: {
+    color: colors.brand,
   },
-
-  recentCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
+  description: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 22,
+    marginTop: 13,
+    maxWidth: 310,
+  },
+  sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+    marginTop: 2,
   },
-
-  recentIcon: {
-    color: "#2563EB",
-    marginRight: 7,
+  sectionTitle: {
+    color: colors.text,
+    fontSize: typography.sectionTitle,
+    fontWeight: "800",
+    letterSpacing: -0.4,
   },
-
-  recentText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#334155",
+  sectionCaption: {
+    color: colors.textMuted,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
   },
-
-  popularGrid: {
+  findCard: {
+    backgroundColor: colors.brand,
+    borderRadius: radius.xl,
+    padding: 20,
+    marginBottom: 14,
+    minHeight: 166,
+    justifyContent: "space-between",
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.16,
+    shadowRadius: 13,
+    elevation: 4,
+  },
+  offerCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 20,
+    marginBottom: 30,
+    minHeight: 166,
+    justifyContent: "space-between",
+  },
+  cardTopRow: {
     flexDirection: "row",
-    gap: 10,
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-
-  placeCard: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 14,
-  },
-
-  placeIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "#EFF6FF",
+  findIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.16)",
     alignItems: "center",
     justifyContent: "center",
   },
-
-  placeIconText: {
-    fontSize: 19,
+  findIconText: {
+    color: colors.white,
+    fontSize: 30,
+    lineHeight: 35,
   },
-
-  placeTitle: {
-    marginTop: 12,
-    fontSize: 13,
+  offerIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 14,
+    backgroundColor: colors.brandSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  offerIconText: {
+    color: colors.brand,
+    fontSize: 25,
     fontWeight: "700",
-    color: "#0F172A",
   },
-
-  placeSubtitle: {
-    marginTop: 3,
-    fontSize: 11,
-    color: "#94A3B8",
+  actionBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.15)",
   },
-
-  actionRow: {
+  actionBadgeText: {
+    color: colors.white,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  offerBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSoft,
+  },
+  offerBadgeText: {
+    color: colors.brand,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  cardBottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginTop: 18,
+  },
+  cardCopy: {
+    flex: 1,
+  },
+  findTitle: {
+    color: colors.white,
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  findDescription: {
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 5,
+  },
+  offerTitle: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  offerDescription: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 5,
+  },
+  findArrowCircle: {
+    width: 39,
+    height: 39,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  findArrow: {
+    color: colors.white,
+    fontSize: 23,
+  },
+  offerArrowCircle: {
+    width: 39,
+    height: 39,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  offerArrow: {
+    color: colors.brand,
+    fontSize: 23,
+  },
+  shortcuts: {
     flexDirection: "row",
     gap: 12,
   },
-
-  actionCard: {
+  shortcutCard: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    padding: 16,
+    minWidth: 0,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
   },
-
-  actionIcon: {
-    fontSize: 25,
-  },
-
-  actionTitle: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-
-  actionSubtitle: {
-    marginTop: 5,
-    fontSize: 12,
-    lineHeight: 17,
-    color: "#64748B",
-  },
-
-  banner: {
-    backgroundColor: "#0F172A",
-    borderRadius: 22,
-    padding: 22,
-  },
-
-  bannerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-
-  bannerText: {
-    marginTop: 8,
-    fontSize: 13,
-    lineHeight: 19,
-    color: "#CBD5E1",
-  },
-
-  bannerButton: {
-    alignSelf: "flex-start",
-    marginTop: 18,
-    backgroundColor: "#2563EB",
+  shortcutIcon: {
+    width: 38,
+    height: 38,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 11,
+    backgroundColor: colors.brandSoft,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 13,
   },
-
-  bannerButtonText: {
-    color: "#FFFFFF",
+  shortcutGlyph: {
+    color: colors.brand,
+    fontSize: 21,
     fontWeight: "700",
-    fontSize: 13,
+  },
+  shortcutTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  shortcutDescription: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 5,
+  },
+  shortcutArrow: {
+    color: colors.brand,
+    fontSize: 19,
+    marginTop: 10,
+    alignSelf: "flex-end",
+  },
+  footer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 26,
+  },
+  footerIcon: {
+    width: 19,
+    height: 19,
+    borderRadius: radius.pill,
+    backgroundColor: colors.successSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  footerIconText: {
+    color: colors.success,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  footerText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  pressed: {
+    opacity: 0.86,
   },
 });

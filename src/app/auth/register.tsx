@@ -19,6 +19,7 @@ import {
 } from "@/services/auth/auth.service";
 import { useAuthStore } from "@/store/auth.store";
 import { UserRole } from "@/types/auth";
+import { goBackSafely } from "@/utils/navigation";
 
 export default function RegisterScreen() {
   const setSession = useAuthStore((state) => state.setSession);
@@ -82,7 +83,7 @@ export default function RegisterScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => goBackSafely("/auth/login")}>
           <Text style={styles.back}>‹ Back</Text>
         </TouchableOpacity>
 

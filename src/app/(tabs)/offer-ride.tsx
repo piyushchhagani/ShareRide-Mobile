@@ -1,120 +1,153 @@
-import { useState } from "react";
-
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
-
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import DateTimePicker from "@expo/ui/community/datetime-picker";
 
 import LocationSelector from "@/components/location/LocationSelector";
-import FrequentPlaces from "@/components/location/FrequentPlaces";
 import LocationMap from "@/components/maps/LocationMap";
 import { useRideStore } from "@/store/ride.store";
 import { createRide } from "@/services/rides/ride.service";
 import { goBackSafely } from "@/utils/navigation";
+import { colors, radius, spacing } from "@/theme/tokens";
 
-/**
- * Converts the selected device-local Date into a local
- * date-time string without converting it to UTC.
- *
- * Example:
- * 5:00 PM IST
- * -> 2026-10-08T17:00:00
- */
 function formatLocalDateTime(date: Date): string {
-  const pad = (value: number) =>
-    value.toString().padStart(2, "0");
+  const pad = (value: number) => String(value).padStart(2, "0");
 
-  return [
-    `${date.getFullYear()}-${pad(
-      date.getMonth() + 1
-    )}-${pad(date.getDate())}`,
-    `${pad(date.getHours())}:${pad(
-      date.getMinutes()
-    )}:00`,
-  ].join("T");
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}:00`
+  );
 }
 
-function formatDisplayDateTime(date: Date): string {
-  return date.toLocaleString([], {
+function formatDate(date: Date): string {
+  return date.toLocaleDateString([], {
     weekday: "short",
     day: "numeric",
     month: "short",
+    year: "numeric",
+  });
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString([], {
     hour: "numeric",
     minute: "2-digit",
   });
 }
 
+type FieldProps = {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  error?: string;
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
+};
+
+function VehicleField({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  error,
+  autoCapitalize = "sentences",
+}: FieldProps) {
+  return (
+    <View style={styles.fieldGroup}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={false}
+        accessibilityLabel={label}
+        style={[styles.input, error ? styles.inputError : null]}
+      />
+
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  );
+}
+
 export default function OfferRideScreen() {
   const { pickup, destination } = useRideStore();
 
-  const [selectedDate, setSelectedDate] = useState(() => {
+  const [departure, setDeparture] = useState(() => {
     const date = new Date();
-
-    date.setMinutes(0);
-    date.setSeconds(0);
-    date.setMilliseconds(0);
-
+    date.setMinutes(0, 0, 0);
     date.setHours(date.getHours() + 1);
-
     return date;
   });
 
-  const [showPicker, setShowPicker] = useState(false);
-
   const [seats, setSeats] = useState(1);
-
-  const [vehicleType, setVehicleType] =
-    useState("");
-
-  const [vehicleNumber, setVehicleNumber] =
-    useState("");
-
+  const [vehicleType, setVehicleType] = useState("");
+  const [vehicleNumber, setVehicleNumber] = useState("");
+  const [pickerVisible, setPickerVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState("");
+
+  const [vehicleTypeError, setVehicleTypeError] = useState("");
+  const [vehicleNumberError, setVehicleNumberError] = useState("");
 
   const canPublish =
-    !!pickup &&
-    !!destination &&
+    Boolean(pickup && destination) &&
     vehicleType.trim().length > 0 &&
     vehicleNumber.trim().length > 0 &&
-    seats > 0;
+    departure.getTime() > Date.now() &&
+    !loading;
 
-  const formattedDate =
-    formatDisplayDateTime(selectedDate);
+  const handlePublish = async () => {
+    setFormError("");
 
-  const publishRide = async () => {
-    if (
-      !canPublish ||
-      !pickup ||
-      !destination ||
-      loading
-    ) {
+    const typeError = vehicleType.trim()
+      ? ""
+      : "Enter your vehicle type.";
+
+    const numberError = vehicleNumber.trim()
+      ? ""
+      : "Enter your vehicle registration number.";
+
+    setVehicleTypeError(typeError);
+    setVehicleNumberError(numberError);
+
+    if (!pickup || !destination) {
+      setFormError("Choose both pickup and destination.");
       return;
     }
 
-    const departureTime =
-      formatLocalDateTime(selectedDate);
+    if (pickup === destination) {
+      setFormError("Pickup and destination must be different.");
+      return;
+    }
 
-    console.log("CREATE RIDE:", {
-      pickup: pickup.address,
-      destination: destination.address,
-      selectedDate: selectedDate.toString(),
-      departureTime,
-      seats,
-      vehicleType,
-      vehicleNumber,
-    });
+    if (departure.getTime() <= Date.now()) {
+      setFormError("Choose a future departure date and time.");
+      return;
+    }
+
+    if (typeError || numberError) {
+      setFormError("Complete the required vehicle details.");
+      return;
+    }
+
+    if (loading) return;
 
     try {
       setLoading(true);
@@ -123,58 +156,47 @@ export default function OfferRideScreen() {
         pickupAddress: pickup.address,
         pickupLatitude: pickup.latitude,
         pickupLongitude: pickup.longitude,
-
-        destinationAddress:
-          destination.address,
-        destinationLatitude:
-          destination.latitude,
-        destinationLongitude:
-          destination.longitude,
-
-        // IMPORTANT:
-        // Send local time, NOT toISOString().
-        departureTime,
-
+        destinationAddress: destination.address,
+        destinationLatitude: destination.latitude,
+        destinationLongitude: destination.longitude,
+        departureTime: formatLocalDateTime(departure),
         availableSeats: seats,
-
-        vehicleType:
-          vehicleType.trim(),
-
-        vehicleNumber:
-          vehicleNumber.trim(),
+        vehicleType: vehicleType.trim(),
+        vehicleNumber: vehicleNumber.trim().toUpperCase(),
       });
 
       Alert.alert(
-        "Ride published!",
-        "Your ride is now available to students.",
+        "Ride published",
+        "Your ride has been submitted successfully.",
         [
           {
             text: "View my rides",
-            onPress: () => {
-              router.replace(
-                "/profile/my-rides"
-              );
-            },
+            onPress: () => router.replace("/profile/my-rides"),
           },
           {
             text: "Done",
             style: "cancel",
-            onPress: () =>
-              goBackSafely(),
+            onPress: () => goBackSafely(),
           },
         ]
       );
-    } catch (error: any) {
-      console.log(
-        "CREATE RIDE ERROR:",
-        error?.response?.data ||
-          error?.message
-      );
+    } catch (error: unknown) {
+      const message =
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error
+          ? (
+              error as {
+                response?: {
+                  data?: { message?: string };
+                };
+              }
+            ).response?.data?.message
+          : undefined;
 
       Alert.alert(
-        "Unable to publish",
-        error?.response?.data?.message ||
-          "Something went wrong. Please try again."
+        "Unable to publish ride",
+        message || "Please check your connection and try again."
       );
     } finally {
       setLoading(false);
@@ -182,246 +204,324 @@ export default function OfferRideScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={
-          Platform.OS === "ios"
-            ? "padding"
-            : undefined
-        }
-        keyboardVerticalOffset={10}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={
-            styles.scrollContent
-          }
+          contentContainerStyle={styles.content}
         >
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() =>
-              goBackSafely()
-            }
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => goBackSafely()}
+            style={styles.backButton}
           >
-            <Text style={styles.back}>
-              Back
-            </Text>
-          </TouchableOpacity>
+            <Text style={styles.backArrow}>‹</Text>
+            <Text style={styles.backText}>Back</Text>
+          </Pressable>
 
-          <View style={styles.header}>
-            <Text style={styles.title}>
-              Offer a ride
-            </Text>
+          <View style={styles.headingBlock}>
+            <View style={styles.eyebrow}>
+              <View style={styles.eyebrowDot} />
+              <Text style={styles.eyebrowText}>DRIVER · CAMPUS TRAVEL</Text>
+            </View>
 
+            <Text style={styles.title}>Offer a ride</Text>
             <Text style={styles.subtitle}>
-              Share your journey with
-              fellow students.
+              Share your journey with fellow students.
             </Text>
           </View>
 
-          <LocationSelector />
+          <View style={styles.sectionHeading}>
+            <Text style={styles.sectionTitle}>Your route</Text>
+            <Text style={styles.sectionHint}>01 / ROUTE</Text>
+          </View>
 
-        <FrequentPlaces type="pickup" />
-        <FrequentPlaces type="destination" />
+          <View style={styles.routeCard}>
+            <LocationSelector />
+          </View>
 
-          {pickup && destination && (
-            <View style={styles.mapPreview}>
-              <LocationMap
-                pickup={pickup}
-                destination={destination}
-                showCurrentLocation
-              />
+          {pickup && destination ? (
+            <View style={styles.mapSection}>
+              <View style={styles.sectionHeading}>
+                <Text style={styles.sectionTitle}>Route preview</Text>
+                <Text style={styles.sectionHint}>MAP</Text>
+              </View>
+
+              <View style={styles.mapPreview}>
+                <LocationMap
+                  pickup={pickup}
+                  destination={destination}
+                  showCurrentLocation
+                />
+              </View>
+            </View>
+          ) : (
+            <View style={styles.mapPlaceholder}>
+              <Text style={styles.mapPlaceholderIcon}>⌖</Text>
+              <View style={styles.mapPlaceholderCopy}>
+                <Text style={styles.mapPlaceholderTitle}>
+                  Your route will appear here
+                </Text>
+                <Text style={styles.mapPlaceholderText}>
+                  Select pickup and destination to preview your route.
+                </Text>
+              </View>
             </View>
           )}
 
-          <TouchableOpacity
-            style={styles.card}
-            activeOpacity={0.8}
-            onPress={() =>
-              setShowPicker(true)
-            }
-          >
-            <Text style={styles.calendar}>
-              Time
-            </Text>
+          <View style={styles.sectionHeading}>
+            <Text style={styles.sectionTitle}>Departure</Text>
+            <Text style={styles.sectionHint}>02 / SCHEDULE</Text>
+          </View>
 
-            <View style={styles.field}>
-              <Text style={styles.label}>
-                Departure
-              </Text>
+          <View style={styles.scheduleCard}>
+            <View style={styles.scheduleRow}>
+              <View style={styles.scheduleIcon}>
+                <Text style={styles.scheduleIconText}>▦</Text>
+              </View>
 
-              <Text style={styles.value}>
-                {formattedDate}
-              </Text>
+              <View style={styles.scheduleCopy}>
+                <Text style={styles.fieldLabel}>Travel date</Text>
+                <Text style={styles.fieldValue}>{formatDate(departure)}</Text>
+              </View>
             </View>
 
-            <Text style={styles.arrow}>
-              Next
-            </Text>
-          </TouchableOpacity>
+            <View style={styles.cardDivider} />
 
-          {showPicker && (
-            <View
-              style={
-                styles.pickerContainer
-              }
-            >
-              <DateTimePicker
-                value={selectedDate}
-                mode="datetime"
-                presentation="dialog"
-                onValueChange={(
-                  _,
-                  date
-                ) => {
-                  if (date) {
-                    setSelectedDate(
-                      date
-                    );
+            <View style={styles.scheduleRow}>
+              <View style={styles.scheduleIcon}>
+                <Text style={styles.scheduleIconText}>◷</Text>
+              </View>
 
-                    setShowPicker(
-                      false
-                    );
-                  }
-                }}
-              />
+              <View style={styles.scheduleCopy}>
+                <Text style={styles.fieldLabel}>Departure time</Text>
+                <Text style={styles.fieldValue}>{formatTime(departure)}</Text>
+              </View>
             </View>
-          )}
 
-          <View style={styles.section}>
-            <Text
-              style={styles.sectionTitle}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setPickerVisible(true)}
+              style={({ pressed }) => [
+                styles.changeDateButton,
+                pressed && styles.pressed,
+              ]}
             >
-              Available seats
+              <Text style={styles.changeDateText}>
+                Change date & time
+              </Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.sectionHeading}>
+            <Text style={styles.sectionTitle}>Available seats</Text>
+            <Text style={styles.sectionHint}>03 / CAPACITY</Text>
+          </View>
+
+          <View style={styles.seatsCard}>
+            <Text style={styles.seatsTitle}>Seats for passengers</Text>
+            <Text style={styles.seatsSubtitle}>
+              Set how many passengers can join your ride.
             </Text>
 
-            <View
-              style={styles.seatSelector}
-            >
-              <TouchableOpacity
-                style={styles.seatButton}
-                onPress={() =>
-                  setSeats(
-                    (current) =>
-                      Math.max(
-                        1,
-                        current - 1
-                      )
-                  )
-                }
+            <View style={styles.stepper}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Remove one available seat"
+                accessibilityState={{ disabled: seats <= 1 }}
+                disabled={seats <= 1}
+                onPress={() => setSeats((current) => Math.max(1, current - 1))}
+                style={[
+                  styles.stepperButton,
+                  seats <= 1 && styles.stepperDisabled,
+                ]}
               >
-                <Text
-                  style={
-                    styles.seatButtonText
-                  }
-                >
-                  âˆ’
-                </Text>
-              </TouchableOpacity>
+                <Text style={styles.stepperSymbol}>−</Text>
+              </Pressable>
 
-              <View
-                style={styles.seatCenter}
-              >
-                <Text
-                  style={styles.seatCount}
-                >
-                  {seats}
-                </Text>
-
-                <Text
-                  style={styles.seatLabel}
-                >
-                  {seats === 1
-                    ? "seat"
-                    : "seats"}
+              <View style={styles.seatCount}>
+                <Text style={styles.seatCountValue}>{seats}</Text>
+                <Text style={styles.seatCountLabel}>
+                  {seats === 1 ? "seat" : "seats"}
                 </Text>
               </View>
 
-              <TouchableOpacity
-                style={styles.seatButton}
-                onPress={() =>
-                  setSeats(
-                    (current) =>
-                      Math.min(
-                        8,
-                        current + 1
-                      )
-                  )
-                }
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Add one available seat"
+                accessibilityState={{ disabled: seats >= 8 }}
+                disabled={seats >= 8}
+                onPress={() => setSeats((current) => Math.min(8, current + 1))}
+                style={[
+                  styles.stepperButton,
+                  seats >= 8 && styles.stepperDisabled,
+                ]}
               >
-                <Text
-                  style={
-                    styles.seatButtonText
-                  }
-                >
-                  +
-                </Text>
-              </TouchableOpacity>
+                <Text style={styles.stepperSymbol}>+</Text>
+              </Pressable>
             </View>
-          </View>
 
-          <View style={styles.section}>
-            <Text
-              style={styles.sectionTitle}
-            >
-              Vehicle details
+            <Text style={styles.seatNote}>
+              Choose between 1 and 8 available seats.
             </Text>
+          </View>
 
-            <TextInput
+          <View style={styles.sectionHeading}>
+            <Text style={styles.sectionTitle}>Vehicle details</Text>
+            <Text style={styles.sectionHint}>04 / VEHICLE</Text>
+          </View>
+
+          <View style={styles.vehicleCard}>
+            <VehicleField
+              label="Vehicle type"
               value={vehicleType}
-              onChangeText={
-                setVehicleType
-              }
-              placeholder="Vehicle type (e.g. Bike, Car)"
-              placeholderTextColor="#94A3B8"
-              style={styles.input}
+              onChangeText={(value) => {
+                setVehicleType(value);
+                if (value.trim()) setVehicleTypeError("");
+              }}
+              placeholder="e.g. Bike, Car"
+              error={vehicleTypeError}
             />
 
-            <TextInput
+            <VehicleField
+              label="Registration number"
               value={vehicleNumber}
-              onChangeText={
-                setVehicleNumber
-              }
-              placeholder="Vehicle number"
-              placeholderTextColor="#94A3B8"
+              onChangeText={(value) => {
+                setVehicleNumber(value.toUpperCase());
+                if (value.trim()) setVehicleNumberError("");
+              }}
+              placeholder="e.g. MH12AB1234"
+              error={vehicleNumberError}
               autoCapitalize="characters"
-              autoCorrect={false}
-              style={styles.input}
             />
           </View>
 
-          <TouchableOpacity
-            activeOpacity={0.85}
-            disabled={
-              !canPublish ||
-              loading
-            }
-            onPress={publishRide}
-            style={[
-              styles.button,
-              (!canPublish ||
-                loading) &&
-                styles.buttonDisabled,
+          <View style={styles.infoNote}>
+            <Text style={styles.infoIcon}>i</Text>
+            <Text style={styles.infoText}>
+              Double-check your route, departure, seat capacity, and vehicle
+              details before publishing.
+            </Text>
+          </View>
+
+          {formError ? (
+            <Text accessibilityRole="alert" style={styles.errorText}>
+              {formError}
+            </Text>
+          ) : null}
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canPublish, busy: loading }}
+            disabled={!canPublish}
+            onPress={handlePublish}
+            style={({ pressed }) => [
+              styles.publishButton,
+              !canPublish && styles.publishButtonDisabled,
+              pressed && canPublish && styles.pressed,
             ]}
           >
             {loading ? (
-              <ActivityIndicator
-                color="#FFFFFF"
-              />
+              <ActivityIndicator color={colors.white} />
             ) : (
-              <Text
-                style={
-                  styles.buttonText
-                }
-              >
-                Publish ride
-              </Text>
+              <>
+                <Text style={styles.publishButtonText}>Publish ride</Text>
+                <Text style={styles.publishButtonArrow}>→</Text>
+              </>
             )}
-          </TouchableOpacity>
+          </Pressable>
+
+          <Text style={styles.footerText}>
+            Your ride will be published using your account.
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={pickerVisible && Platform.OS !== "android"}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close date and time picker"
+            style={styles.modalBackdrop}
+            onPress={() => setPickerVisible(false)}
+          />
+
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+
+            <Text style={styles.modalTitle}>Set departure</Text>
+            <Text style={styles.modalSubtitle}>
+              {formatDate(departure)} · {formatTime(departure)}
+            </Text>
+
+            <View style={styles.pickerContainer}>
+              <DateTimePicker
+                value={departure}
+                mode="datetime"
+                presentation={Platform.OS === "android" ? "dialog" : "inline"}
+                minimumDate={new Date()}
+                onValueChange={(_, value) => {
+                  if (!value) return;
+
+                  if (value.getTime() > Date.now()) {
+                    setDeparture(value);
+                    setFormError("");
+                  } else {
+                    setFormError("Choose a future departure date and time.");
+                  }
+                }}
+                onDismiss={() => setPickerVisible(false)}
+              />
+            </View>
+
+            {departure.getTime() <= Date.now() ? (
+              <Text style={styles.errorText}>
+                Choose a future departure date and time.
+              </Text>
+            ) : null}
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setPickerVisible(false)}
+              style={styles.doneButton}
+            >
+              <Text style={styles.doneButtonText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {Platform.OS === "android" && pickerVisible ? (
+        <DateTimePicker
+          value={departure}
+          mode="datetime"
+          presentation="dialog"
+          minimumDate={new Date()}
+          onValueChange={(_, value) => {
+            if (!value) return;
+
+            if (value.getTime() > Date.now()) {
+              setDeparture(value);
+              setFormError("");
+            } else {
+              setFormError("Choose a future departure date and time.");
+            }
+          }}
+          onDismiss={() => setPickerVisible(false)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -430,167 +530,387 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
-    paddingHorizontal: 20,
+    backgroundColor: colors.background,
   },
-
-  scrollContent: {
-    paddingBottom: 30,
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: 36,
   },
-
-  mapPreview: {
-    height: 240,
-    marginBottom: 18,
-    borderRadius: 20,
-    overflow: "hidden",
-  },
-
-  back: {
-    marginTop: 8,
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#2563EB",
-  },
-
-  header: {
-    marginTop: 24,
-    marginBottom: 22,
-  },
-
-  title: {
-    fontSize: 30,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-
-  subtitle: {
-    marginTop: 7,
-    fontSize: 15,
-    color: "#64748B",
-  },
-
-  card: {
-    minHeight: 76,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    paddingHorizontal: 18,
+  backButton: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 14,
+    alignSelf: "flex-start",
+    minHeight: 44,
+    gap: 7,
+    marginBottom: spacing.md,
   },
-
-  calendar: {
-    width: 34,
-    fontSize: 25,
-    color: "#2563EB",
+  backArrow: {
+    fontSize: 30,
+    lineHeight: 32,
+    color: colors.brand,
   },
-
-  field: {
-    flex: 1,
-  },
-
-  label: {
-    fontSize: 12,
-    color: "#64748B",
-    marginBottom: 5,
-  },
-
-  value: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#0F172A",
-  },
-
-  arrow: {
-    fontSize: 28,
-    color: "#94A3B8",
-  },
-
-  pickerContainer: {
-    position: "absolute",
-    width: 1,
-    height: 1,
-  },
-
-  section: {
-    marginTop: 8,
-  },
-
-  sectionTitle: {
-    fontSize: 17,
+  backText: {
+    fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
-    marginBottom: 10,
+    color: colors.brand,
   },
-
-  seatSelector: {
-    height: 64,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 17,
-    paddingHorizontal: 10,
+  headingBlock: {
+    marginBottom: spacing.xl,
+  },
+  eyebrow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: spacing.sm,
+  },
+  eyebrowDot: {
+    width: 7,
+    height: 7,
+    borderRadius: radius.pill,
+    backgroundColor: colors.success,
+  },
+  eyebrowText: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    color: colors.textSecondary,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: "800",
+    letterSpacing: -0.8,
+    color: colors.text,
+  },
+  subtitle: {
+    marginTop: spacing.xs,
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.textSecondary,
+  },
+  sectionHeading: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
   },
-
-  seatButton: {
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  sectionHint: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+    color: colors.textMuted,
+  },
+  routeCard: {
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  mapSection: {
+    marginTop: spacing.lg,
+  },
+  mapPreview: {
+    height: 230,
+    borderRadius: radius.xl,
+    overflow: "hidden",
+    backgroundColor: colors.surfaceSecondary,
+  },
+  mapPlaceholder: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  mapPlaceholderIcon: {
+    fontSize: 28,
+    color: colors.brand,
+  },
+  mapPlaceholderCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  mapPlaceholderTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  mapPlaceholderText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textSecondary,
+  },
+  scheduleCard: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  scheduleRow: {
+    minHeight: 70,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  scheduleIcon: {
     width: 42,
     height: 42,
-    borderRadius: 13,
-    backgroundColor: "#EFF6FF",
+    borderRadius: radius.md,
+    backgroundColor: colors.brandSoft,
     alignItems: "center",
     justifyContent: "center",
   },
-
-  seatButtonText: {
-    fontSize: 25,
-    color: "#2563EB",
+  scheduleIconText: {
+    fontSize: 23,
+    color: colors.brand,
   },
-
-  seatCenter: {
-    alignItems: "center",
+  scheduleCopy: {
+    flex: 1,
+    gap: 5,
   },
-
-  seatCount: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#0F172A",
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.textSecondary,
   },
-
-  seatLabel: {
-    fontSize: 11,
-    color: "#64748B",
-  },
-
-  input: {
-    height: 54,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    marginBottom: 10,
+  fieldValue: {
     fontSize: 15,
-    color: "#0F172A",
+    fontWeight: "700",
+    color: colors.text,
   },
-
-  button: {
-    height: 56,
-    borderRadius: 17,
-    backgroundColor: "#2563EB",
+  cardDivider: {
+    height: 1,
+    backgroundColor: colors.divider,
+  },
+  changeDateButton: {
+    minHeight: 42,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 16,
+    marginTop: spacing.xs,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandSoft,
   },
-
-  buttonDisabled: {
-    backgroundColor: "#CBD5E1",
+  changeDateText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.brand,
   },
-
-  buttonText: {
-    color: "#FFFFFF",
+  seatsCard: {
+    padding: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  seatsTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "800",
+    color: colors.text,
+  },
+  seatsSubtitle: {
+    marginTop: 5,
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.textSecondary,
+  },
+  stepper: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  stepperButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.brandSoft,
+  },
+  stepperDisabled: {
+    opacity: 0.35,
+  },
+  stepperSymbol: {
+    fontSize: 25,
+    fontWeight: "600",
+    color: colors.brand,
+  },
+  seatCount: {
+    minWidth: 54,
+    alignItems: "center",
+    gap: 1,
+  },
+  seatCountValue: {
+    fontSize: 23,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  seatCountLabel: {
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  seatNote: {
+    marginTop: spacing.md,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  vehicleCard: {
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  fieldGroup: {
+    marginBottom: spacing.md,
+  },
+  input: {
+    minHeight: 52,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    fontSize: 14,
+    color: colors.text,
+  },
+  inputError: {
+    borderColor: colors.danger,
+  },
+  errorText: {
+    marginTop: spacing.xs,
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.danger,
+  },
+  infoNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandSoft,
+  },
+  infoIcon: {
+    width: 20,
+    height: 20,
+    textAlign: "center",
+    textAlignVertical: "center",
+    overflow: "hidden",
+    borderRadius: radius.pill,
+    backgroundColor: colors.brand,
+    color: colors.white,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.textSecondary,
+  },
+  publishButton: {
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.brand,
+  },
+  publishButtonDisabled: {
+    opacity: 0.45,
+  },
+  publishButtonText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: colors.white,
+  },
+  publishButtonArrow: {
+    fontSize: 21,
+    color: colors.white,
+  },
+  footerText: {
+    marginTop: spacing.md,
+    textAlign: "center",
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFill,
+  },
+  modalSheet: {
+    maxHeight: "88%",
+    padding: spacing.xl,
+    paddingBottom: spacing.xxl,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    backgroundColor: colors.surface,
+  },
+  modalHandle: {
+    width: 42,
+    height: 5,
+    borderRadius: radius.pill,
+    alignSelf: "center",
+    marginBottom: spacing.lg,
+    backgroundColor: colors.border,
+  },
+  modalTitle: {
+    fontSize: 21,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  modalSubtitle: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  pickerContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 180,
+    overflow: "hidden",
+  },
+  doneButton: {
+    minHeight: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.brand,
+  },
+  doneButtonText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: colors.white,
+  },
+  pressed: {
+    opacity: 0.8,
   },
 });

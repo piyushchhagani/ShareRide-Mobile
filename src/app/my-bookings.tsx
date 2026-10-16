@@ -1,4 +1,6 @@
-import { useCallback, useState } from "react";
+
+import { useCallback, useRef, useState } from "react";
+import { isAxiosError } from "axios";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -13,89 +15,156 @@ import { router, useFocusEffect } from "expo-router";
 
 import {
   getMyRequests,
-  RideRequest,
+  type RideRequest,
 } from "@/services/rides/request.service";
+import { useAuthStore } from "@/store/auth.store";
 import { goBackSafely } from "@/utils/navigation";
+import {
+  colors,
+  layout,
+  radius,
+  spacing,
+  typography,
+} from "@/theme/tokens";
+
+const STATUS = {
+  PENDING: {
+    label: "Pending",
+    message: "Waiting for the driver to respond.",
+    background: colors.warningSoft,
+    foreground: colors.warning,
+  },
+  ACCEPTED: {
+    label: "Accepted",
+    message: "Your ride request was accepted.",
+    background: colors.successSoft,
+    foreground: colors.success,
+  },
+  REJECTED: {
+    label: "Rejected",
+    message: "This ride request was rejected.",
+    background: colors.dangerSoft,
+    foreground: colors.danger,
+  },
+} as const;
+
+function formatDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+
+  return date.toLocaleString([], {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 export default function MyBookingsScreen() {
+  const isAuthenticated = useAuthStore(
+    (state) => state.isAuthenticated
+  );
+  const authLoading = useAuthStore((state) => state.isLoading);
+
   const [requests, setRequests] = useState<RideRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const loadBookings = async () => {
+  const requestVersion = useRef(0);
+
+  const loadBookings = useCallback(async (showLoading = false) => {
+    if (authLoading || !isAuthenticated) return;
+
+    const version = ++requestVersion.current;
+
+    if (showLoading) setLoading(true);
+
     try {
       setError("");
-
       const data = await getMyRequests();
 
-      setRequests(data);
+      if (requestVersion.current === version) {
+        setRequests(data);
+      }
     } catch (requestError) {
-      console.error(
-        "MY BOOKINGS ERROR:",
-        requestError
-      );
+      if (requestVersion.current !== version) return;
+
+      const status = isAxiosError(requestError)
+        ? requestError.response?.status
+        : undefined;
 
       setError(
-        "Unable to load your bookings."
+        status === 401
+          ? "Your session has expired. Please sign in again."
+          : "Unable to load your bookings. Please try again."
       );
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestVersion.current === version) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  };
+  }, [authLoading, isAuthenticated]);
 
   useFocusEffect(
     useCallback(() => {
-      loadBookings();
-    }, [])
+      if (authLoading) {
+        setLoading(true);
+        return;
+      }
+
+      if (!isAuthenticated) {
+        requestVersion.current += 1;
+        setRequests([]);
+        setError("");
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      void loadBookings(true);
+
+      return () => {
+        requestVersion.current += 1;
+      };
+    }, [authLoading, isAuthenticated, loadBookings])
   );
 
-  const getStatusStyle = (
-    status: RideRequest["status"]
-  ) => {
-    switch (status) {
-      case "ACCEPTED":
-        return {
-          backgroundColor: "#ECFDF5",
-          color: "#059669",
-        };
-
-      case "REJECTED":
-        return {
-          backgroundColor: "#FEF2F2",
-          color: "#DC2626",
-        };
-
-      default:
-        return {
-          backgroundColor: "#EFF6FF",
-          color: "#2563EB",
-        };
-    }
-  };
-
-  const formatDate = (value: string) => {
-    return new Date(value).toLocaleString([], {
-      day: "numeric",
-      month: "short",
-      hour: "numeric",
-      minute: "2-digit",
+  const openRide = (rideId: number) => {
+    router.push({
+      pathname: "/ride-details",
+      params: { rideId: String(rideId) },
     });
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.center}>
-          <ActivityIndicator
-            size="large"
-            color="#2563EB"
-          />
+          <ActivityIndicator size="large" color={colors.brand} />
+          <Text style={styles.secondaryText}>Loading your bookings…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-          <Text style={styles.loading}>
-            Loading bookings...
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.center}>
+          <Text style={styles.emoji}>🔐</Text>
+          <Text style={styles.emptyTitle}>Sign in to view bookings</Text>
+          <Text style={styles.secondaryText}>
+            Your ride requests will appear here after you sign in.
           </Text>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => router.push("/auth/login")}
+          >
+            <Text style={styles.primaryButtonText}>Sign in</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -103,208 +172,124 @@ export default function MyBookingsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => goBackSafely()}
-        >
-          <Text style={styles.back}>‹ Back</Text>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              void loadBookings();
+            }}
+            tintColor={colors.brand}
+          />
+        }
+      >
+        <TouchableOpacity onPress={() => goBackSafely()} style={styles.back}>
+          <Text style={styles.backText}>‹  Back</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>
-          My Bookings
-        </Text>
-
+        <Text style={styles.eyebrow}>YOUR RIDES</Text>
+        <Text style={styles.title}>My bookings</Text>
         <Text style={styles.subtitle}>
-          Rides you&apos;ve requested
+          Track your ride requests and driver responses.
         </Text>
-      </View>
 
-      {error ? (
-        <View style={styles.center}>
-          <Text style={styles.errorIcon}>
-            ⚠️
-          </Text>
-
-          <Text style={styles.errorTitle}>
-            Something went wrong
-          </Text>
-
-          <Text style={styles.errorText}>
-            {error}
-          </Text>
-
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={loadBookings}
-          >
-            <Text style={styles.retryText}>
-              Try again
+        {error ? (
+          <View style={styles.stateCard}>
+            <Text style={styles.emoji}>⚠️</Text>
+            <Text style={styles.emptyTitle}>Couldn't load bookings</Text>
+            <Text style={styles.secondaryText}>{error}</Text>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => void loadBookings(true)}
+            >
+              <Text style={styles.primaryButtonText}>Try again</Text>
+            </TouchableOpacity>
+          </View>
+        ) : requests.length === 0 ? (
+          <View style={styles.stateCard}>
+            <Text style={styles.emoji}>🚘</Text>
+            <Text style={styles.emptyTitle}>Your next ride starts here</Text>
+            <Text style={styles.secondaryText}>
+              Find a ride to campus or your next destination.
             </Text>
-          </TouchableOpacity>
-        </View>
-      ) : requests.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyIcon}>
-            🎫
-          </Text>
-
-          <Text style={styles.emptyTitle}>
-            No bookings yet
-          </Text>
-
-          <Text style={styles.emptyText}>
-            Find a ride and request a seat.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.findButton}
-            onPress={() =>
-              router.push("/(tabs)/find-ride")
-            }
-          >
-            <Text style={styles.findText}>
-              Find a Ride
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => router.push("/(tabs)/find-ride")}
+            >
+              <Text style={styles.primaryButtonText}>Find a ride</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            <Text style={styles.count}>
+              {requests.length} {requests.length === 1 ? "request" : "requests"}
             </Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                loadBookings();
-              }}
-            />
-          }
-        >
-          {requests.map((request) => {
-            const status = getStatusStyle(
-              request.status
-            );
 
-            return (
-              <TouchableOpacity
-                key={request.id}
-                activeOpacity={0.85}
-                style={styles.card}
-                onPress={() =>
-                  router.push({
-                    pathname: "/ride-details",
-                    params: {
-                      rideId:
-                        request.rideId.toString(),
-                    },
-                  })
-                }
-              >
-                <View style={styles.cardHeader}>
-                  <View style={styles.ticketIcon}>
-                    <Text style={styles.ticketEmoji}>
-                      🚗
-                    </Text>
+            {requests.map((request) => {
+              const status =
+                STATUS[request.status as keyof typeof STATUS] ??
+                STATUS.PENDING;
+
+              return (
+                <TouchableOpacity
+                  key={request.id}
+                  activeOpacity={0.88}
+                  style={styles.card}
+                  onPress={() => openRide(request.rideId)}
+                >
+                  <View style={styles.cardTop}>
+                    <View style={styles.rideIcon}>
+                      <Text style={styles.rideEmoji}>🚗</Text>
+                    </View>
+
+                    <View style={styles.cardHeading}>
+                      <Text style={styles.cardTitle}>
+                        Ride #{request.rideId}
+                      </Text>
+                      <Text style={styles.date}>
+                        Requested {formatDate(request.createdAt)}
+                      </Text>
+                    </View>
+
+                    <View style={[styles.badge, { backgroundColor: status.background }]}>
+                      <Text style={[styles.badgeText, { color: status.foreground }]}>
+                        {status.label}
+                      </Text>
+                    </View>
                   </View>
 
-                  <View
-                    style={styles.cardHeaderText}
-                  >
-                    <Text
-                      style={styles.bookingTitle}
-                    >
-                      Ride #{request.rideId}
-                    </Text>
+                  <View style={styles.divider} />
 
-                    <Text style={styles.date}>
-                      Requested{" "}
-                      {formatDate(
-                        request.createdAt
-                      )}
-                    </Text>
+                  <View style={styles.cardBottom}>
+                    <View>
+                      <Text style={styles.label}>SEATS REQUESTED</Text>
+                      <Text style={styles.seats}>
+                        {request.requestedSeats}
+                      </Text>
+                    </View>
+                    <Text style={styles.viewRide}>View ride  ›</Text>
                   </View>
 
-                  <View
-                    style={[
-                      styles.status,
-                      {
-                        backgroundColor:
-                          status.backgroundColor,
-                      },
-                    ]}
-                  >
-                    <Text
+                  <View style={styles.statusMessage}>
+                    <View
                       style={[
-                        styles.statusText,
-                        { color: status.color },
+                        styles.statusDot,
+                        { backgroundColor: status.foreground },
                       ]}
-                    >
-                      {request.status}
+                    />
+                    <Text style={styles.statusMessageText}>
+                      {status.message}
                     </Text>
                   </View>
-                </View>
-
-                <View style={styles.divider} />
-
-                <View style={styles.bookingInfo}>
-                  <View>
-                    <Text
-                      style={styles.infoLabel}
-                    >
-                      SEATS
-                    </Text>
-
-                    <Text
-                      style={styles.infoValue}
-                    >
-                      {request.requestedSeats}
-                    </Text>
-                  </View>
-
-                  <View style={styles.viewDetails}>
-                    <Text
-                      style={styles.viewDetailsText}
-                    >
-                      View ride →
-                    </Text>
-                  </View>
-                </View>
-
-                {request.status ===
-                  "PENDING" && (
-                  <Text
-                    style={styles.pendingText}
-                  >
-                    Waiting for the driver to
-                    respond
-                  </Text>
-                )}
-
-                {request.status ===
-                  "ACCEPTED" && (
-                  <Text
-                    style={styles.acceptedText}
-                  >
-                    Your ride has been
-                    accepted 🎉
-                  </Text>
-                )}
-
-                {request.status ===
-                  "REJECTED" && (
-                  <Text
-                    style={styles.rejectedText}
-                  >
-                    This ride request was
-                    rejected.
-                  </Text>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -312,226 +297,196 @@ export default function MyBookingsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F7F9FC",
+    backgroundColor: colors.background,
   },
-
-  header: {
-    padding: 20,
-    paddingBottom: 12,
+  content: {
+    padding: layout.screenPadding,
+    paddingBottom: spacing.xxl,
+    flexGrow: 1,
   },
-
   back: {
-    color: "#2563EB",
-    fontSize: 18,
+    alignSelf: "flex-start",
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  backText: {
+    color: colors.brand,
+    fontSize: typography.bodyLarge,
     fontWeight: "700",
-    marginBottom: 22,
   },
-
-  title: {
-    fontSize: 32,
+  eyebrow: {
+    color: colors.brand,
+    fontSize: typography.caption,
     fontWeight: "800",
-    color: "#111827",
+    letterSpacing: 1.5,
   },
-
+  title: {
+    marginTop: spacing.xs,
+    color: colors.text,
+    fontSize: typography.screenTitle,
+    fontWeight: "800",
+  },
   subtitle: {
-    marginTop: 5,
-    color: "#64748B",
+    marginTop: spacing.xs,
+    marginBottom: spacing.xl,
+    color: colors.textSecondary,
+    fontSize: typography.body,
+    lineHeight: 21,
   },
-
   list: {
-    padding: 20,
-    paddingTop: 10,
-    paddingBottom: 40,
+    gap: spacing.md,
   },
-
+  count: {
+    color: colors.textSecondary,
+    fontSize: typography.caption,
+    fontWeight: "700",
+  },
   card: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 14,
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...{
+      shadowColor: colors.text,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.04,
+      shadowRadius: 10,
+      elevation: 2,
+    },
   },
-
-  cardHeader: {
+  cardTop: {
     flexDirection: "row",
     alignItems: "center",
+    gap: spacing.sm,
   },
-
-  ticketIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
-    backgroundColor: "#EFF6FF",
+  rideIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: colors.brandSoft,
   },
-
-  ticketEmoji: {
+  rideEmoji: {
     fontSize: 21,
   },
-
-  cardHeaderText: {
+  cardHeading: {
     flex: 1,
-    marginLeft: 12,
+    gap: 4,
   },
-
-  bookingTitle: {
-    fontSize: 16,
+  cardTitle: {
+    color: colors.text,
+    fontSize: typography.cardTitle,
     fontWeight: "800",
-    color: "#111827",
   },
-
   date: {
-    marginTop: 3,
-    fontSize: 12,
-    color: "#64748B",
+    color: colors.textSecondary,
+    fontSize: typography.caption,
   },
-
-  status: {
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 10,
+  badge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
   },
-
-  statusText: {
-    fontSize: 10,
+  badgeText: {
+    fontSize: typography.caption,
     fontWeight: "800",
   },
-
   divider: {
     height: 1,
-    backgroundColor: "#E2E8F0",
-    marginVertical: 16,
+    backgroundColor: colors.divider,
+    marginVertical: spacing.md,
   },
-
-  bookingInfo: {
+  cardBottom: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-
-  infoLabel: {
-    color: "#94A3B8",
-    fontSize: 11,
+  label: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: "800",
+    letterSpacing: 0.7,
+  },
+  seats: {
+    marginTop: spacing.xxs,
+    color: colors.text,
+    fontSize: typography.bodyLarge,
     fontWeight: "800",
   },
-
-  infoValue: {
-    marginTop: 3,
-    color: "#111827",
-    fontSize: 18,
+  viewRide: {
+    color: colors.brand,
+    fontSize: typography.body,
     fontWeight: "800",
   },
-
-  viewDetails: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: "#EFF6FF",
+  statusMessage: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
   },
-
-  viewDetailsText: {
-    color: "#2563EB",
-    fontSize: 12,
-    fontWeight: "800",
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-
-  pendingText: {
-    marginTop: 15,
-    color: "#2563EB",
-    fontSize: 13,
-    fontWeight: "600",
+  statusMessageText: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.caption,
   },
-
-  acceptedText: {
-    marginTop: 15,
-    color: "#059669",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-
-  rejectedText: {
-    marginTop: 15,
-    color: "#DC2626",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-
   center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 30,
+    padding: spacing.xl,
+    gap: spacing.sm,
   },
-
-  loading: {
-    marginTop: 12,
-    color: "#64748B",
-  },
-
-  errorIcon: {
-    fontSize: 45,
-  },
-
-  errorTitle: {
-    marginTop: 14,
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#111827",
-  },
-
-  errorText: {
-    marginTop: 8,
-    color: "#64748B",
-    textAlign: "center",
-  },
-
-  retryButton: {
-    marginTop: 20,
-    paddingHorizontal: 25,
-    paddingVertical: 13,
-    backgroundColor: "#2563EB",
-    borderRadius: 15,
-  },
-
-  retryText: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-  },
-
-  empty: {
+  stateCard: {
     flex: 1,
+    minHeight: 260,
     alignItems: "center",
     justifyContent: "center",
-    padding: 35,
+    padding: spacing.xl,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm,
   },
-
-  emptyIcon: {
-    fontSize: 50,
+  emoji: {
+    fontSize: 42,
+    marginBottom: spacing.xs,
   },
-
   emptyTitle: {
-    marginTop: 18,
-    fontSize: 24,
+    color: colors.text,
+    fontSize: typography.sectionTitle,
     fontWeight: "800",
-    color: "#111827",
-  },
-
-  emptyText: {
-    marginTop: 8,
-    color: "#64748B",
     textAlign: "center",
   },
-
-  findButton: {
-    marginTop: 24,
-    paddingHorizontal: 28,
-    paddingVertical: 15,
-    backgroundColor: "#2563EB",
-    borderRadius: 16,
+  secondaryText: {
+    color: colors.textSecondary,
+    fontSize: typography.body,
+    lineHeight: 21,
+    textAlign: "center",
   },
-
-  findText: {
-    color: "#FFFFFF",
+  primaryButton: {
+    minHeight: layout.buttonHeight,
+    alignSelf: "stretch",
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.brand,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryButtonText: {
+    color: colors.white,
+    fontSize: typography.button,
     fontWeight: "800",
   },
 });

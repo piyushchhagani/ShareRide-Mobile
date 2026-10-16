@@ -1,11 +1,11 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { goBackSafely } from "@/utils/navigation";
 
 export default function NotificationsScreen() {
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity onPress={() => router.back()}>
+      <TouchableOpacity onPress={() => goBackSafely()}>
         <Text style={styles.back}>‹ Back</Text>
       </TouchableOpacity>
 

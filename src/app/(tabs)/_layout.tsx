@@ -1,23 +1,38 @@
 import { Tabs } from "expo-router";
-import { Text } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { colors, radii, spacing, typography } from "@/constants/theme";
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#2563EB",
-        tabBarInactiveTintColor: "#94A3B8",
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          height: 68,
-          paddingTop: 8,
-          paddingBottom: 10,
-          backgroundColor: "#FFFFFF",
+          height: 58 + insets.bottom,
+          paddingTop: spacing.sm,
+          paddingBottom: Math.max(insets.bottom, spacing.sm),
+          backgroundColor: colors.surface,
           borderTopWidth: 1,
-          borderTopColor: "#E2E8F0",
+          borderTopColor: colors.border,
+          borderTopLeftRadius: radii.lg,
+          borderTopRightRadius: radii.lg,
+          elevation: 10,
+          shadowColor: colors.text,
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.06,
+          shadowRadius: 12,
+        },
+        tabBarItemStyle: {
+          minHeight: 44,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: typography.caption,
           fontWeight: "600",
         },
       }}
@@ -26,48 +41,44 @@ export default function TabsLayout() {
         name="home"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>⌂</Text>
+          tabBarAccessibilityLabel: "Home tab",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
       />
-
       <Tabs.Screen
         name="rides"
         options={{
-          title: "Rides",
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>▣</Text>
+          title: "My Rides",
+          tabBarAccessibilityLabel: "My rides tab",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="car-outline" size={size} color={color} />
           ),
         }}
       />
-
       <Tabs.Screen
-        name="offer-ride"
+        name="bookings"
         options={{
-          title: "Offer",
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>＋</Text>
+          title: "My Bookings",
+          tabBarAccessibilityLabel: "My bookings tab",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="calendar-outline" size={size} color={color} />
           ),
         }}
       />
-
       <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 20, color }}>◯</Text>
+          tabBarAccessibilityLabel: "Profile tab",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-circle-outline" size={size} color={color} />
           ),
         }}
       />
-
-      <Tabs.Screen
-        name="find-ride"
-        options={{
-          href: null,
-        }}
-      />
+      <Tabs.Screen name="find-ride" options={{ href: null }} />
+      <Tabs.Screen name="offer-ride" options={{ href: null }} />
     </Tabs>
   );
 }

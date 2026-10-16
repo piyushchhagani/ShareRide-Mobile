@@ -2,6 +2,7 @@ import { ReactNode, useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { router, useSegments } from "expo-router";
 
+import { colors } from "@/constants/theme";
 import { useAuthStore } from "@/store/auth.store";
 
 type Props = {
@@ -40,7 +41,7 @@ export default function AuthGate({ children }: Props) {
   if (isLoading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#2563EB" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -53,6 +54,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
   },
 });

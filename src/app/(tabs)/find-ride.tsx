@@ -1,405 +1,407 @@
-import { useState } from "react";
-
+import React, { useState } from "react";
 import {
   Modal,
+  Platform,
+  Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
-
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import DateTimePicker from "@expo/ui/community/datetime-picker";
 
 import LocationSelector from "@/components/location/LocationSelector";
-import FrequentPlaces from "@/components/location/FrequentPlaces";
 import LocationMap from "@/components/maps/LocationMap";
 import { useRideStore } from "@/store/ride.store";
 import { goBackSafely } from "@/utils/navigation";
+import { colors, radius, spacing } from "@/theme/tokens";
 
-/**
- * Converts a Date into a local date-time string.
- *
- * IMPORTANT:
- * Do not use toISOString() here.
- *
- * Example:
- * 5:00 PM local time
- * -> 2026-10-08T17:00:00
- */
+type PickerMode = "date" | "time";
+
 function formatLocalDateTime(date: Date): string {
-  const pad = (value: number) =>
-    value.toString().padStart(2, "0");
+  const pad = (value: number) => String(value).padStart(2, "0");
 
-  return [
-    `${date.getFullYear()}-${pad(
-      date.getMonth() + 1
-    )}-${pad(date.getDate())}`,
-    `${pad(date.getHours())}:${pad(
-      date.getMinutes()
-    )}:00`,
-  ].join("T");
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}:00`
+  );
 }
 
 function formatDate(date: Date): string {
-  return date.toLocaleString([], {
+  return date.toLocaleDateString([], {
     weekday: "short",
     day: "numeric",
     month: "short",
+    year: "numeric",
   });
 }
 
 function formatTime(date: Date): string {
-  return date.toLocaleString([], {
+  return date.toLocaleTimeString([], {
     hour: "numeric",
     minute: "2-digit",
   });
 }
 
+function startOfToday(): Date {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
 export default function FindRideScreen() {
-  const { pickup, destination } =
-    useRideStore();
+  const { pickup, destination } = useRideStore();
 
-  const [selectedDate, setSelectedDate] =
-    useState(() => {
-      const date = new Date();
+  const [departure, setDeparture] = useState(() => {
+    const initial = new Date();
+    initial.setMinutes(0, 0, 0);
+    initial.setHours(initial.getHours() + 1);
+    return initial;
+  });
 
-      date.setMinutes(0);
-      date.setSeconds(0);
-      date.setMilliseconds(0);
+  const [seats, setSeats] = useState(1);
+  const [pickerMode, setPickerMode] = useState<PickerMode>("date");
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [dateError, setDateError] = useState("");
+  const [searchError, setSearchError] = useState("");
 
-      date.setHours(
-        date.getHours() + 1
-      );
+  const canSearch = Boolean(pickup && destination);
+  const isPastDeparture = departure.getTime() <= Date.now();
 
-      return date;
-    });
-
-  const [showTimePicker, setShowTimePicker] =
-    useState(false);
-
-  const [seats, setSeats] =
-    useState(1);
-
-  const canContinue =
-    !!pickup && !!destination;
-
-  const changeTime = (hour: number) => {
-    const next = new Date(
-      selectedDate
-    );
-
-    next.setHours(hour);
-    next.setMinutes(0);
-    next.setSeconds(0);
-    next.setMilliseconds(0);
-
-    setSelectedDate(next);
-    setShowTimePicker(false);
+  const openPicker = (mode: PickerMode) => {
+    setPickerMode(mode);
+    setPickerVisible(true);
+    setDateError("");
   };
 
-  const handleFindMatches = () => {
+  const updateDeparture = (value: Date) => {
+    const next = new Date(departure);
+
+    if (pickerMode === "date") {
+      next.setFullYear(
+        value.getFullYear(),
+        value.getMonth(),
+        value.getDate()
+      );
+    } else {
+      next.setHours(value.getHours(), value.getMinutes(), 0, 0);
+    }
+
+    if (next.getTime() <= Date.now()) {
+      setDateError("Choose a future departure date and time.");
+    } else {
+      setDateError("");
+    }
+
+    setDeparture(next);
+  };
+
+  const handleSearch = () => {
+    setSearchError("");
+
     if (!pickup || !destination) {
+      setSearchError("Choose both pickup and destination to continue.");
       return;
     }
 
-    const departureTime =
-      formatLocalDateTime(
-        selectedDate
-      );
+    if (pickup === destination) {
+      setSearchError("Pickup and destination must be different.");
+      return;
+    }
 
-    console.log(
-      "FIND RIDE:",
-      {
-        pickup,
-        destination,
-        selectedDate:
-          selectedDate.toString(),
-        departureTime,
-        seats,
-      }
-    );
+    if (departure.getTime() <= Date.now()) {
+      setSearchError("Choose a future departure date and time.");
+      return;
+    }
 
     router.push({
       pathname: "/ride/results",
       params: {
-        departureTime,
-        seats: seats.toString(),
+        departureTime: formatLocalDateTime(departure),
+        seats: String(seats),
       },
     });
   };
 
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-    >
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+
       <ScrollView
-        showsVerticalScrollIndicator={
-          false
-        }
-        contentContainerStyle={
-          styles.content
-        }
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          onPress={() => goBackSafely()}
           style={styles.backButton}
-          onPress={() =>
-            goBackSafely()
-          }
         >
+          <Text style={styles.backArrow}>‹</Text>
           <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
+        </Pressable>
 
-        <Text style={styles.title}>
-          Find a ride
-        </Text>
+        <View style={styles.headingBlock}>
+          <View style={styles.eyebrow}>
+            <View style={styles.eyebrowDot} />
+            <Text style={styles.eyebrowText}>CAMPUS TRAVEL</Text>
+          </View>
 
-        <Text style={styles.subtitle}>
-          Find students travelling your
-          way.
-        </Text>
+          <Text style={styles.title}>Find your ride</Text>
+          <Text style={styles.subtitle}>
+            Find a ride that fits your route and schedule.
+          </Text>
+        </View>
 
-        <LocationSelector />
+        <View style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>Your route</Text>
+          <Text style={styles.sectionHint}>01 / ROUTE</Text>
+        </View>
 
-        <FrequentPlaces type="pickup" />
-        <FrequentPlaces type="destination" />
+        <View style={styles.routeCard}>
+          <LocationSelector />
+        </View>
 
-        {pickup && destination && (
-          <View style={styles.mapPreview}>
-            <LocationMap
-              pickup={pickup}
-              destination={destination}
-              showCurrentLocation
-            />
+        {pickup && destination ? (
+          <View style={styles.mapSection}>
+            <View style={styles.sectionHeading}>
+              <Text style={styles.sectionTitle}>Route preview</Text>
+              <Text style={styles.sectionHint}>MAP</Text>
+            </View>
+
+            <View style={styles.mapPreview}>
+              <LocationMap
+                pickup={pickup}
+                destination={destination}
+                showCurrentLocation
+              />
+            </View>
+          </View>
+        ) : (
+          <View style={styles.mapPlaceholder}>
+            <Text style={styles.mapPlaceholderIcon}>⌖</Text>
+            <View style={styles.mapPlaceholderCopy}>
+              <Text style={styles.mapPlaceholderTitle}>
+                Your route will appear here
+              </Text>
+              <Text style={styles.mapPlaceholderText}>
+                Select your pickup and destination to preview the route.
+              </Text>
+            </View>
           </View>
         )}
 
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={styles.timeCard}
-          onPress={() =>
-            setShowTimePicker(true)
-          }
-        >
-          <View style={styles.timeIcon}>
-            <Text style={styles.timeIconText}>Time</Text>
-          </View>
-
-          <View
-            style={styles.timeContent}
-          >
-            <Text
-              style={styles.timeLabel}
-            >
-              When
-            </Text>
-
-            <Text
-              style={styles.timeValue}
-            >
-              {formatDate(
-                selectedDate
-              )}
-              {", "}
-              {formatTime(
-                selectedDate
-              )}
-            </Text>
-          </View>
-
-          <Text style={styles.arrow}>
-            Next
-          </Text>
-        </TouchableOpacity>
-
-        <Text
-          style={styles.sectionTitle}
-        >
-          Preferences
-        </Text>
-
-        <View
-          style={styles.preferenceRow}
-        >
-          <View
-            style={styles.preferenceCard}
-          >
-            <Text style={styles.preferenceIcon}>Rider</Text>
-
-            <Text
-              style={styles.preferenceTitle}
-            >
-              Any rider
-            </Text>
-
-            <Text
-              style={
-                styles.preferenceSubtitle
-              }
-            >
-              Student community
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={[
-              styles.preferenceCard,
-              seats === 2 &&
-                styles.preferenceCardActive,
-            ]}
-            onPress={() =>
-              setSeats(
-                seats === 1
-                  ? 2
-                  : 1
-              )
-            }
-          >
-            <Text style={styles.preferenceIcon}>Rider</Text>
-
-            <Text
-              style={styles.preferenceTitle}
-            >
-              {seats}{" "}
-              {seats === 1
-                ? "seat"
-                : "seats"}
-            </Text>
-
-            <Text
-              style={
-                styles.preferenceSubtitle
-              }
-            >
-              Tap to change
-            </Text>
-          </TouchableOpacity>
+        <View style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>Departure</Text>
+          <Text style={styles.sectionHint}>02 / SCHEDULE</Text>
         </View>
 
-        <TouchableOpacity
-          disabled={!canContinue}
-          activeOpacity={0.85}
-          style={[
-            styles.findButton,
-            !canContinue &&
-              styles.findButtonDisabled,
-          ]}
-          onPress={
-            handleFindMatches
-          }
-        >
-          <Text
-            style={styles.findButtonText}
+        <View style={styles.scheduleCard}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => openPicker("date")}
+            style={({ pressed }) => [
+              styles.scheduleRow,
+              pressed && styles.pressed,
+            ]}
           >
-            Find Matches
+            <View style={styles.scheduleIcon}>
+              <Text style={styles.scheduleIconText}>▦</Text>
+            </View>
+
+            <View style={styles.scheduleCopy}>
+              <Text style={styles.fieldLabel}>Travel date</Text>
+              <Text style={styles.fieldValue}>{formatDate(departure)}</Text>
+            </View>
+
+            <Text style={styles.editText}>Change</Text>
+          </Pressable>
+
+          <View style={styles.cardDivider} />
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => openPicker("time")}
+            style={({ pressed }) => [
+              styles.scheduleRow,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={styles.scheduleIcon}>
+              <Text style={styles.scheduleIconText}>◷</Text>
+            </View>
+
+            <View style={styles.scheduleCopy}>
+              <Text style={styles.fieldLabel}>Departure time</Text>
+              <Text style={styles.fieldValue}>{formatTime(departure)}</Text>
+            </View>
+
+            <Text style={styles.editText}>Change</Text>
+          </Pressable>
+        </View>
+
+        {dateError ? <Text style={styles.errorText}>{dateError}</Text> : null}
+
+        <View style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>Passengers</Text>
+          <Text style={styles.sectionHint}>03 / SEATS</Text>
+        </View>
+
+        <View style={styles.seatsCard}>
+          <View style={styles.seatsCopy}>
+            <Text style={styles.seatsTitle}>Seats needed</Text>
+            <Text style={styles.seatsSubtitle}>
+              How many passengers are travelling?
+            </Text>
+          </View>
+
+          <View style={styles.stepper}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Remove one seat"
+              accessibilityState={{ disabled: seats <= 1 }}
+              disabled={seats <= 1}
+              onPress={() => setSeats((current) => Math.max(1, current - 1))}
+              style={({ pressed }) => [
+                styles.stepperButton,
+                seats <= 1 && styles.stepperDisabled,
+                pressed && seats > 1 && styles.pressed,
+              ]}
+            >
+              <Text style={styles.stepperSymbol}>−</Text>
+            </Pressable>
+
+            <View style={styles.seatCount}>
+              <Text style={styles.seatCountValue}>{seats}</Text>
+              <Text style={styles.seatCountLabel}>
+                {seats === 1 ? "seat" : "seats"}
+              </Text>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add one seat"
+              accessibilityState={{ disabled: seats >= 6 }}
+              disabled={seats >= 6}
+              onPress={() => setSeats((current) => Math.min(6, current + 1))}
+              style={({ pressed }) => [
+                styles.stepperButton,
+                seats >= 6 && styles.stepperDisabled,
+                pressed && seats < 6 && styles.pressed,
+              ]}
+            >
+              <Text style={styles.stepperSymbol}>+</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.seatNote}>Choose between 1 and 6 passengers.</Text>
+        </View>
+
+        <View style={styles.infoNote}>
+          <Text style={styles.infoIcon}>i</Text>
+          <Text style={styles.infoText}>
+            Ride availability and final seat confirmation depend on the driver.
           </Text>
-        </TouchableOpacity>
+        </View>
+
+        {searchError ? (
+          <Text accessibilityRole="alert" style={styles.errorText}>
+            {searchError}
+          </Text>
+        ) : null}
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={!canSearch || isPastDeparture}
+          onPress={handleSearch}
+          style={({ pressed }) => [
+            styles.searchButton,
+            (!canSearch || isPastDeparture) && styles.searchButtonDisabled,
+            pressed && canSearch && !isPastDeparture && styles.pressed,
+          ]}
+        >
+          <Text style={styles.searchButtonText}>Find available rides</Text>
+          <Text style={styles.searchButtonArrow}>→</Text>
+        </Pressable>
+
+        <Text style={styles.footerText}>
+          Review your route and departure before searching.
+        </Text>
       </ScrollView>
 
       <Modal
-        visible={showTimePicker}
+        visible={pickerVisible && Platform.OS !== "android"}
         transparent
         animationType="slide"
-        onRequestClose={() =>
-          setShowTimePicker(false)
-        }
+        onRequestClose={() => setPickerVisible(false)}
       >
-        <View
-          style={styles.modalOverlay}
-        >
-          <View
-            style={styles.timeModal}
-          >
-            <View
-              style={styles.modalHandle}
-            />
+        <View style={styles.modalOverlay}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close date and time picker"
+            style={styles.modalBackdrop}
+            onPress={() => setPickerVisible(false)}
+          />
 
-            <Text
-              style={styles.modalTitle}
-            >
-              Choose departure time
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+
+            <Text style={styles.modalTitle}>
+              {pickerMode === "date"
+                ? "Choose travel date"
+                : "Choose departure time"}
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              {formatDate(departure)} · {formatTime(departure)}
             </Text>
 
-            <Text
-              style={styles.modalSubtitle}
-            >
-              {formatDate(
-                selectedDate
-              )}
-            </Text>
-
-            <View
-              style={styles.timeGrid}
-            >
-              {[
-                7, 8, 9, 10,
-                11, 12, 13, 14,
-                15, 16, 17, 18,
-                19, 20, 21, 22,
-              ].map((hour) => {
-                const displayHour =
-                  hour > 12
-                    ? hour - 12
-                    : hour === 0
-                      ? 12
-                      : hour;
-
-                const suffix =
-                  hour >= 12
-                    ? "PM"
-                    : "AM";
-
-                const active =
-                  selectedDate.getHours() ===
-                  hour;
-
-                return (
-                  <TouchableOpacity
-                    key={hour}
-                    activeOpacity={0.8}
-                    style={[
-                      styles.timeOption,
-                      active &&
-                        styles.timeOptionActive,
-                    ]}
-                    onPress={() =>
-                      changeTime(hour)
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.timeOptionText,
-                        active &&
-                          styles.timeOptionTextActive,
-                      ]}
-                    >
-                      {displayHour}:00{" "}
-                      {suffix}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+            <View style={styles.pickerContainer}>
+              <DateTimePicker
+                value={departure}
+                mode={pickerMode}
+                presentation="inline"
+                minimumDate={
+                  pickerMode === "date" ? startOfToday() : undefined
+                }
+                onValueChange={(_, value) => {
+                  if (value) updateDeparture(value);
+                }}
+                onDismiss={() => setPickerVisible(false)}
+              />
             </View>
 
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() =>
-                setShowTimePicker(
-                  false
-                )
-              }
+            {dateError ? (
+              <Text style={styles.errorText}>{dateError}</Text>
+            ) : null}
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setPickerVisible(false)}
+              style={styles.doneButton}
             >
-              <Text
-                style={styles.cancelText}
-              >
-                Cancel
-              </Text>
-            </TouchableOpacity>
+              <Text style={styles.doneButtonText}>Done</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
+
+      {Platform.OS === "android" && pickerVisible ? (
+        <DateTimePicker
+          value={departure}
+          mode={pickerMode}
+          presentation="dialog"
+          minimumDate={
+            pickerMode === "date" ? startOfToday() : undefined
+          }
+          onValueChange={(_, value) => {
+            if (value) updateDeparture(value);
+          }}
+          onDismiss={() => setPickerVisible(false)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -407,236 +409,354 @@ export default function FindRideScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F7F9FC",
+    backgroundColor: colors.background,
   },
-
   content: {
-    padding: 20,
-    paddingBottom: 40,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: 36,
   },
-
-  mapPreview: {
-    height: 240,
-    marginTop: 18,
-    borderRadius: 20,
-    overflow: "hidden",
-  },
-
   backButton: {
-    marginBottom: 24,
-  },
-
-  backText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#2563EB",
-  },
-
-  title: {
-    fontSize: 42,
-    fontWeight: "800",
-    color: "#111827",
-  },
-
-  subtitle: {
-    marginTop: 6,
-    marginBottom: 28,
-    fontSize: 18,
-    color: "#64748B",
-  },
-
-  timeCard: {
-    marginTop: 24,
-    minHeight: 112,
-    borderRadius: 28,
-    backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 24,
-
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-
-    elevation: 2,
+    alignSelf: "flex-start",
+    minHeight: 44,
+    gap: 7,
+    marginBottom: spacing.md,
   },
-
-  timeIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EFF6FF",
-  },
-
-  timeIconText: {
-    fontSize: 28,
-    color: "#2563EB",
-  },
-
-  timeContent: {
-    flex: 1,
-    marginLeft: 18,
-  },
-
-  timeLabel: {
-    fontSize: 16,
-    color: "#64748B",
-    marginBottom: 6,
-  },
-
-  timeValue: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111827",
-  },
-
-  arrow: {
-    fontSize: 32,
-    color: "#CBD5E1",
-  },
-
-  sectionTitle: {
-    marginTop: 34,
-    marginBottom: 16,
-    fontSize: 25,
-    fontWeight: "800",
-    color: "#111827",
-  },
-
-  preferenceRow: {
-    flexDirection: "row",
-    gap: 14,
-  },
-
-  preferenceCard: {
-    flex: 1,
-    minHeight: 145,
-    padding: 20,
-    borderRadius: 24,
-    backgroundColor: "#FFFFFF",
-  },
-
-  preferenceCardActive: {
-    borderWidth: 2,
-    borderColor: "#2563EB",
-  },
-
-  preferenceIcon: {
+  backArrow: {
     fontSize: 30,
-    marginBottom: 18,
+    lineHeight: 32,
+    color: colors.brand,
   },
-
-  preferenceTitle: {
-    fontSize: 18,
+  backText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.brand,
+  },
+  headingBlock: {
+    marginBottom: spacing.xl,
+  },
+  eyebrow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: spacing.sm,
+  },
+  eyebrowDot: {
+    width: 7,
+    height: 7,
+    borderRadius: radius.pill,
+    backgroundColor: colors.success,
+  },
+  eyebrowText: {
+    fontSize: 10,
     fontWeight: "800",
-    color: "#111827",
+    letterSpacing: 1.4,
+    color: colors.textSecondary,
   },
-
-  preferenceSubtitle: {
-    marginTop: 5,
+  title: {
+    fontSize: 32,
+    fontWeight: "800",
+    letterSpacing: -0.8,
+    color: colors.text,
+  },
+  subtitle: {
+    marginTop: spacing.xs,
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.textSecondary,
+  },
+  sectionHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  sectionHint: {
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1,
+    color: colors.textMuted,
+  },
+  routeCard: {
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  mapSection: {
+    marginTop: spacing.lg,
+  },
+  mapPreview: {
+    height: 230,
+    borderRadius: radius.xl,
+    overflow: "hidden",
+    backgroundColor: colors.surfaceSecondary,
+  },
+  mapPlaceholder: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  mapPlaceholderIcon: {
+    fontSize: 28,
+    color: colors.brand,
+  },
+  mapPlaceholderCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  mapPlaceholderTitle: {
     fontSize: 13,
-    color: "#94A3B8",
+    fontWeight: "700",
+    color: colors.text,
   },
-
-  findButton: {
-    marginTop: 42,
-    height: 64,
-    borderRadius: 24,
+  mapPlaceholderText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textSecondary,
+  },
+  scheduleCard: {
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  scheduleRow: {
+    minHeight: 78,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  scheduleIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandSoft,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#2563EB",
   },
-
-  findButtonDisabled: {
-    backgroundColor: "#94A3B8",
+  scheduleIconText: {
+    fontSize: 23,
+    color: colors.brand,
   },
-
-  findButtonText: {
-    color: "#FFFFFF",
-    fontSize: 20,
+  scheduleCopy: {
+    flex: 1,
+    gap: 5,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  fieldValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  editText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.brand,
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: colors.divider,
+  },
+  seatsCard: {
+    padding: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  seatsCopy: {
+    gap: 5,
+  },
+  seatsTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  seatsSubtitle: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.textSecondary,
+  },
+  stepper: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  stepperButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.brandSoft,
+  },
+  stepperDisabled: {
+    opacity: 0.35,
+  },
+  stepperSymbol: {
+    fontSize: 25,
+    fontWeight: "600",
+    color: colors.brand,
+  },
+  seatCount: {
+    minWidth: 54,
+    alignItems: "center",
+    gap: 1,
+  },
+  seatCountValue: {
+    fontSize: 23,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  seatCountLabel: {
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  seatNote: {
+    marginTop: spacing.md,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  infoNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandSoft,
+  },
+  infoIcon: {
+    width: 20,
+    height: 20,
+    textAlign: "center",
+    textAlignVertical: "center",
+    overflow: "hidden",
+    borderRadius: radius.pill,
+    backgroundColor: colors.brand,
+    color: colors.white,
+    fontSize: 12,
     fontWeight: "800",
   },
-
+  infoText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.textSecondary,
+  },
+  errorText: {
+    marginTop: spacing.sm,
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.danger,
+  },
+  searchButton: {
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.brand,
+  },
+  searchButtonDisabled: {
+    opacity: 0.45,
+  },
+  searchButtonText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: colors.white,
+  },
+  searchButtonArrow: {
+    fontSize: 21,
+    color: colors.white,
+  },
+  footerText: {
+    marginTop: spacing.md,
+    textAlign: "center",
+    fontSize: 11,
+    color: colors.textMuted,
+  },
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor:
-      "rgba(15, 23, 42, 0.45)",
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
   },
-
-  timeModal: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    padding: 24,
-    paddingBottom: 34,
+  modalBackdrop: {
+    ...StyleSheet.absoluteFill,
   },
-
+  modalSheet: {
+    maxHeight: "88%",
+    padding: spacing.xl,
+    paddingBottom: spacing.xxl,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    backgroundColor: colors.surface,
+  },
   modalHandle: {
-    width: 44,
+    width: 42,
     height: 5,
-    borderRadius: 5,
-    backgroundColor: "#CBD5E1",
+    borderRadius: radius.pill,
     alignSelf: "center",
-    marginBottom: 22,
+    marginBottom: spacing.lg,
+    backgroundColor: colors.border,
   },
-
   modalTitle: {
-    fontSize: 24,
+    fontSize: 21,
     fontWeight: "800",
-    color: "#111827",
+    color: colors.text,
   },
-
   modalSubtitle: {
-    marginTop: 4,
-    marginBottom: 20,
-    fontSize: 15,
-    color: "#64748B",
-  },
-
-  timeGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-
-  timeOption: {
-    width: "23%",
-    paddingVertical: 13,
-    borderRadius: 14,
-    backgroundColor: "#F1F5F9",
-    alignItems: "center",
-  },
-
-  timeOptionActive: {
-    backgroundColor: "#2563EB",
-  },
-
-  timeOptionText: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
     fontSize: 13,
-    fontWeight: "700",
-    color: "#334155",
+    color: colors.textSecondary,
   },
-
-  timeOptionTextActive: {
-    color: "#FFFFFF",
-  },
-
-  cancelButton: {
-    marginTop: 20,
+  pickerContainer: {
     alignItems: "center",
-    paddingVertical: 12,
+    justifyContent: "center",
+    minHeight: 180,
+    overflow: "hidden",
   },
-
-  cancelText: {
-    color: "#2563EB",
-    fontSize: 17,
-    fontWeight: "700",
+  doneButton: {
+    minHeight: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.brand,
+  },
+  doneButtonText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: colors.white,
+  },
+  pressed: {
+    opacity: 0.8,
   },
 });
