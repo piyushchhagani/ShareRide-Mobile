@@ -79,7 +79,7 @@ export default function HelpScreen() {
           <Text style={styles.backText}>‹  Back</Text>
         </TouchableOpacity>
 
-        <Text style={styles.eyebrow}>WE'RE HERE TO HELP</Text>
+        <Text style={styles.eyebrow}>WE&apos;RE HERE TO HELP</Text>
         <Text style={styles.title}>Help & support</Text>
         <Text style={styles.subtitle}>
           Quick answers to common questions about using ShareRide.

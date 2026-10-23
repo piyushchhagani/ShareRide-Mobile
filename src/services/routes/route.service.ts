@@ -22,6 +22,8 @@ export type RouteResponse = {
   durationSeconds: number;
   /** Array of [longitude, latitude] GeoJSON coordinate pairs */
   coordinates: [number, number][];
+  /** True when road routing failed and the backend returned a straight-line estimate. */
+  approximate?: boolean;
 };
 
 export async function calculateRoute(
@@ -34,4 +36,4 @@ export async function calculateRoute(
     );
 
   return data;
-}
+}

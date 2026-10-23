@@ -59,6 +59,7 @@ export default function ProfileScreen() {
     (state) => state.isLoading
   );
   const logout = useAuthStore((state) => state.logout);
+  const user = useAuthStore((state) => state.user);
 
   const [opening, setOpening] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -154,9 +155,9 @@ export default function ProfileScreen() {
           </View>
 
           <View style={styles.profileText}>
-            <Text style={styles.profileName}>ShareRide member</Text>
+            <Text style={styles.profileName}>{user?.name?.trim() || "ShareRide member"}</Text>
             <Text style={styles.profileDescription}>
-              Signed in to ShareRide
+              {user?.email || "Signed in to ShareRide"}
             </Text>
           </View>
 
@@ -200,6 +201,13 @@ export default function ProfileScreen() {
         <Text style={styles.sectionTitle}>Account</Text>
 
         <View style={styles.menuCard}>
+          <MenuItem
+            icon="👥"
+            title="Manage accounts"
+            subtitle="Switch between your saved accounts"
+            onPress={() => navigate("/profile/accounts")}
+          />
+          <View style={styles.divider} />
           <MenuItem
             icon="⚙️"
             title="Account settings"

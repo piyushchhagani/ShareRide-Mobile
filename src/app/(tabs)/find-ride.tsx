@@ -69,7 +69,7 @@ export default function FindRideScreen() {
   const [searchError, setSearchError] = useState("");
 
   const canSearch = Boolean(pickup && destination);
-  const isPastDeparture = departure.getTime() <= Date.now();
+  const isPastDeparture = departure.getTime() <= new Date().getTime();
 
   const openPicker = (mode: PickerMode) => {
     setPickerMode(mode);

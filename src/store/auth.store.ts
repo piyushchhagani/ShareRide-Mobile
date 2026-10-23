@@ -8,6 +8,7 @@ import {
   User,
 } from "@/services/auth/auth.service";
 import { setUnauthorizedHandler } from "@/services/api/client";
+import { useRideStore } from "@/store/ride.store";
 
 type AuthState = {
   user: User | null;
@@ -17,6 +18,7 @@ type AuthState = {
   setSession: (token: string, user: User) => void;
   restoreSession: () => Promise<void>;
   logout: () => Promise<void>;
+  switchAccount: (token: string, user: User) => void;
   expireSession: () => void;
 };
 
@@ -49,6 +51,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         const token = await getStoredToken();
 
         if (!token) {
+          useRideStore.getState().clearLocations();
           set({
             token: null,
             user: null,
@@ -67,6 +70,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           isLoading: false,
         });
       } catch {
+        useRideStore.getState().clearLocations();
         try {
           await logoutService();
         } catch {
@@ -87,10 +91,16 @@ export const useAuthStore = create<AuthState>((set) => ({
     return restorePromise;
   },
 
+  switchAccount: (token, user) => {
+    useRideStore.getState().clearLocations();
+    set({ token, user, isAuthenticated: true, isLoading: false });
+  },
+
   logout: async () => {
     try {
       await logoutService();
     } finally {
+      useRideStore.getState().clearLocations();
       set({
         token: null,
         user: null,
@@ -101,6 +111,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   expireSession: () => {
+    useRideStore.getState().clearLocations();
     set({
       token: null,
       user: null,

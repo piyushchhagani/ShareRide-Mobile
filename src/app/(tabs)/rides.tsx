@@ -5,6 +5,7 @@ import {
   FlatList,
   RefreshControl,
   StyleSheet,
+  Alert,
   Text,
   TouchableOpacity,
   View,
@@ -12,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
 
-import { getMyRides, type Ride } from "@/services/rides/ride.service";
+import { getMyRides, updateRideStatus, type Ride } from "@/services/rides/ride.service";
 import { goBackSafely } from "@/utils/navigation";
 import {
   colors,
@@ -39,7 +40,15 @@ function statusColors(status: string) {
   if (status === "ACTIVE") {
     return { background: colors.successSoft, text: colors.success };
   }
-
+  if (status === "FULL") {
+    return { background: colors.warningSoft, text: colors.warning };
+  }
+  if (status === "COMPLETED") {
+    return { background: colors.brandSoft, text: colors.brand };
+  }
+  if (status === "CANCELLED") {
+    return { background: colors.dangerSoft, text: colors.danger };
+  }
   return { background: colors.surfaceSecondary, text: colors.textSecondary };
 }
 
@@ -74,6 +83,33 @@ export default function RidesScreen() {
       pathname: "/driver-requests",
       params: { rideId: String(rideId) },
     });
+  };
+
+  const changeStatus = (ride: Ride, status: "COMPLETED" | "CANCELLED") => {
+    const verb = status === "COMPLETED" ? "complete" : "cancel";
+    Alert.alert(
+      `${status === "COMPLETED" ? "Complete" : "Cancel"} ride?`,
+      `Are you sure you want to ${verb} ride #${ride.id}?`,
+      [
+        { text: "Keep ride", style: "cancel" },
+        {
+          text: status === "COMPLETED" ? "Complete ride" : "Cancel ride",
+          style: status === "CANCELLED" ? "destructive" : "default",
+          onPress: () => {
+            void (async () => {
+              try {
+                const updated = await updateRideStatus(ride.id, status);
+                setRides((current) => current.map((item) => item.id === ride.id ? updated : item));
+                Alert.alert("Ride updated", `Ride #${ride.id} is now ${status.toLowerCase()}.`);
+              } catch (error: any) {
+                const message = error?.response?.data?.message || "Could not update this ride. Please try again.";
+                Alert.alert("Update failed", message);
+              }
+            })();
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -170,11 +206,7 @@ export default function RidesScreen() {
           const status = statusColors(item.status);
 
           return (
-            <TouchableOpacity
-              activeOpacity={0.88}
-              style={styles.card}
-              onPress={() => openRequests(item.id)}
-            >
+            <View style={styles.card}>
               <View style={styles.cardHeader}>
                 <View style={styles.carIcon}>
                   <Text style={styles.carEmoji}>🚗</Text>
@@ -222,9 +254,30 @@ export default function RidesScreen() {
                   </Text>
                 </View>
 
-                <Text style={styles.viewRequests}>Passenger requests  ›</Text>
+                <TouchableOpacity onPress={() => openRequests(item.id)} accessibilityRole="button">
+                  <Text style={styles.viewRequests}>Passenger requests  ›</Text>
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
+
+              {(item.status === "ACTIVE" || item.status === "FULL") && (
+                <View style={styles.statusActions}>
+                  <TouchableOpacity
+                    style={styles.completeButton}
+                    onPress={() => changeStatus(item, "COMPLETED")}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.completeButtonText}>Mark completed</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => changeStatus(item, "CANCELLED")}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.cancelButtonText}>Cancel ride</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           );
         }}
       />
@@ -416,6 +469,41 @@ const styles = StyleSheet.create({
     color: colors.brand,
     fontSize: typography.caption,
     fontWeight: "800",
+  },
+  statusActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  completeButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.brand,
+  },
+  completeButtonText: {
+    color: colors.white,
+    fontSize: typography.caption,
+    fontWeight: "700",
+  },
+  cancelButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 42,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    backgroundColor: colors.surface,
+  },
+  cancelButtonText: {
+    color: colors.danger,
+    fontSize: typography.caption,
+    fontWeight: "700",
   },
   emptyCard: {
     flex: 1,

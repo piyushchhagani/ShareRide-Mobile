@@ -199,7 +199,7 @@ export default function MyBookingsScreen() {
         {error ? (
           <View style={styles.stateCard}>
             <Text style={styles.emoji}>⚠️</Text>
-            <Text style={styles.emptyTitle}>Couldn't load bookings</Text>
+            <Text style={styles.emptyTitle}>Couldn&apos;t load bookings</Text>
             <Text style={styles.secondaryText}>{error}</Text>
             <TouchableOpacity
               style={styles.primaryButton}

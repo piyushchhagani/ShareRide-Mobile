@@ -230,7 +230,7 @@ export default function NotificationsScreen() {
         <View style={styles.infoBanner}>
           <Text style={styles.infoIcon}>ℹ️</Text>
           <Text style={styles.infoText}>
-            Preview notifications are stored only in this screen's local
+            Preview notifications are stored only in this screen&apos;s local
             state. Real booking alerts and push notifications require an
             integrated notification service.
           </Text>

@@ -22,6 +22,7 @@ export default function WelcomeScreen() {
         <View style={styles.actions}>
           <TouchableOpacity style={styles.primary} onPress={() => router.push("/auth/register")}><Text style={styles.primaryText}>Get started <Text style={styles.arrow}>{"›"}</Text></Text></TouchableOpacity>
           <TouchableOpacity style={styles.secondary} onPress={() => router.push("/auth/login")}><Text style={styles.secondaryText}>I already have an account</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.secondary} onPress={() => router.push("/profile/accounts")}><Text style={styles.secondaryText}>Manage saved accounts</Text></TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>

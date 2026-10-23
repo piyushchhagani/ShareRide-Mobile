@@ -107,11 +107,14 @@ export default function DriverRequestsScreen() {
       await loadRequests();
     } catch (requestError: any) {
       const data = requestError?.response?.data;
+      const status = requestError?.response?.status;
+      const message = typeof data === "string"
+        ? data
+        : data?.message || requestError?.message || "Please try again.";
+      const errorId = typeof data === "object" ? data?.errorId : undefined;
       Alert.alert(
-        "Unable to update request",
-        typeof data === "string"
-          ? data
-          : data?.message || "Please try again."
+        status ? `Unable to update request (${status})` : "Unable to update request",
+        `${String(message)}${errorId ? `\nReference: ${errorId}` : ""}`
       );
     } finally {
       setProcessing(null);
@@ -153,7 +156,7 @@ export default function DriverRequestsScreen() {
       {error ? (
         <View style={styles.center}>
           <Text style={styles.stateIcon}>⚠️</Text>
-          <Text style={styles.stateTitle}>Couldn't load requests</Text>
+          <Text style={styles.stateTitle}>Couldn&apos;t load requests</Text>
           <Text style={styles.secondary}>{error}</Text>
           <TouchableOpacity
             style={styles.primaryButton}

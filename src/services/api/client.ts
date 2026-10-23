@@ -8,7 +8,7 @@ export function setUnauthorizedHandler(handler: () => void) {
 }
 
 export const api = create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL,
+  baseURL: process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, ""),
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",

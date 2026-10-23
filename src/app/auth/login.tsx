@@ -118,6 +118,13 @@ export default function LoginScreen() {
         </View>
 
         <TouchableOpacity
+          onPress={() => router.push("/profile/accounts")}
+          style={styles.registerButton}
+        >
+          <Text style={styles.registerText}>Manage saved accounts</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           onPress={() => router.push("/auth/register")}
           style={styles.registerButton}
         >

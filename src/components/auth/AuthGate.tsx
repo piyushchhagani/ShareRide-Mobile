@@ -27,8 +27,9 @@ export default function AuthGate({ children }: Props) {
 
     const inAuthGroup = segments[0] === "auth";
     const isWelcomeScreen = segments[0] === "welcome";
+    const isManageAccounts = segments[0] === "profile" && segments[1] === "accounts";
 
-    if (!isAuthenticated && !inAuthGroup && !isWelcomeScreen) {
+    if (!isAuthenticated && !inAuthGroup && !isWelcomeScreen && !isManageAccounts) {
       router.replace("/welcome");
       return;
     }

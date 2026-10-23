@@ -1,7 +1,7 @@
-﻿{
+{
     "expo":  {
-                 "name":  "ShareRide-Mobile",
-                 "slug":  "ShareRide-Mobile",
+                 "name":  "ShareRide",
+                 "slug":  "shareride",
                  "scheme":  "shareride-mobile",
                  "version":  "1.0.0",
                  "orientation":  "portrait",
@@ -38,7 +38,7 @@
                                          "image":  "./assets/splash-icon.png",
                                          "imageWidth":  180,
                                          "resizeMode":  "contain",
-                                         "backgroundColor":  "#F5F7FB"
+                                         "backgroundColor":  "#10224A"
                                      }
                                  ],
                                  "expo-font"

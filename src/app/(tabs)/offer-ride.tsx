@@ -110,7 +110,7 @@ export default function OfferRideScreen() {
     Boolean(pickup && destination) &&
     vehicleType.trim().length > 0 &&
     vehicleNumber.trim().length > 0 &&
-    departure.getTime() > Date.now() &&
+    departure.getTime() > new Date().getTime() &&
     !loading;
 
   const handlePublish = async () => {
@@ -486,7 +486,7 @@ export default function OfferRideScreen() {
               />
             </View>
 
-            {departure.getTime() <= Date.now() ? (
+            {departure.getTime() <= new Date().getTime() ? (
               <Text style={styles.errorText}>
                 Choose a future departure date and time.
               </Text>
