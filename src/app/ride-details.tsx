@@ -211,6 +211,11 @@ export default function RideDetailsScreen() {
 
   const requestRejected =
     existingRequest?.status === "REJECTED";
+
+  const requestCancelled =
+    existingRequest?.status === "CANCELLED";
+
+  const canReRequest = requestRejected || requestCancelled;
   const requestedSeatCount =
     Number.isInteger(Number(requestedSeatsParam)) &&
     Number(requestedSeatsParam) > 0
@@ -251,6 +256,9 @@ export default function RideDetailsScreen() {
           <View style={styles.driverInfo}>
             <Text style={styles.driverName}>
               {ride.driverName}
+              {ride.driverAverageRating != null
+                ? ` · ★ ${ride.driverAverageRating.toFixed(1)}`
+                : ""}
             </Text>
 
             <Text style={styles.driverVehicle}>
@@ -349,7 +357,7 @@ export default function RideDetailsScreen() {
           </View>
         </View>
 
-        {/* SEATS */}
+        {/* SEATS & FARE */}
 
         <View style={styles.infoCard}>
           <Text style={styles.infoIcon}>💺</Text>
@@ -366,6 +374,9 @@ export default function RideDetailsScreen() {
             <Text style={styles.infoSecondary}>
               Request {requestedSeatCount}{" "}
               {requestedSeatCount === 1 ? "seat" : "seats"}
+              {ride.pricePerSeat != null
+                ? ` · ₹${Number(ride.pricePerSeat).toFixed(0)} per seat`
+                : ""}
             </Text>
           </View>
         </View>
@@ -399,7 +410,9 @@ export default function RideDetailsScreen() {
                   ? "Ride accepted"
                   : requestPending
                     ? "Request pending"
-                    : "Request rejected"}
+                    : requestCancelled
+                      ? "Request cancelled"
+                      : "Request rejected"}
               </Text>
 
               <Text style={styles.statusText}>
@@ -407,7 +420,9 @@ export default function RideDetailsScreen() {
                   ? "The driver accepted your request."
                   : requestPending
                     ? "Waiting for the driver to respond."
-                    : "The driver rejected your request."}
+                    : requestCancelled
+                      ? "You cancelled your previous request."
+                      : "The driver rejected your request."}
               </Text>
             </View>
           </View>
@@ -415,7 +430,7 @@ export default function RideDetailsScreen() {
 
         {/* REQUEST BUTTON */}
 
-        {(!existingRequest || requestRejected) && (
+        {(!existingRequest || canReRequest) && (
           <TouchableOpacity
             disabled={
               requesting ||
@@ -435,7 +450,7 @@ export default function RideDetailsScreen() {
               <Text style={styles.requestText}>
                 {ride.availableSeats <= 0
                   ? "Ride full"
-                  : requestRejected
+                  : canReRequest
                     ? "Request again"
                     : "Request this ride"}
               </Text>

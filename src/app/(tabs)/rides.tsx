@@ -1,11 +1,12 @@
-
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
   Alert,
+  FlatList,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -22,6 +23,15 @@ import {
   spacing,
   typography,
 } from "@/theme/tokens";
+
+type RideFilter = "ALL" | "ACTIVE" | "COMPLETED" | "CANCELLED";
+
+const FILTER_OPTIONS: { key: RideFilter; label: string }[] = [
+  { key: "ALL", label: "All" },
+  { key: "ACTIVE", label: "Active" },
+  { key: "COMPLETED", label: "Completed" },
+  { key: "CANCELLED", label: "Cancelled" },
+];
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -54,6 +64,7 @@ function statusColors(status: string) {
 
 export default function RidesScreen() {
   const [rides, setRides] = useState<Ride[]>([]);
+  const [filter, setFilter] = useState<RideFilter>("ALL");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -78,6 +89,14 @@ export default function RidesScreen() {
     }, [loadRides])
   );
 
+  const filteredRides = useMemo(() => {
+    if (filter === "ALL") return rides;
+    if (filter === "ACTIVE") {
+      return rides.filter((r) => r.status === "ACTIVE" || r.status === "FULL");
+    }
+    return rides.filter((r) => r.status === filter);
+  }, [rides, filter]);
+
   const openRequests = (rideId: number) => {
     router.push({
       pathname: "/driver-requests",
@@ -85,31 +104,40 @@ export default function RidesScreen() {
     });
   };
 
+  const performStatusUpdate = async (ride: Ride, status: "COMPLETED" | "CANCELLED") => {
+    try {
+      const updated = await updateRideStatus(ride.id, status);
+      setRides((current) => current.map((item) => (item.id === ride.id ? updated : item)));
+      Alert.alert("Ride updated", `Ride #${ride.id} is now ${status.toLowerCase()}.`);
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.message || "Could not update this ride. Please try again.";
+      Alert.alert("Update failed", message);
+    }
+  };
+
   const changeStatus = (ride: Ride, status: "COMPLETED" | "CANCELLED") => {
     const verb = status === "COMPLETED" ? "complete" : "cancel";
-    Alert.alert(
-      `${status === "COMPLETED" ? "Complete" : "Cancel"} ride?`,
-      `Are you sure you want to ${verb} ride #${ride.id}?`,
-      [
-        { text: "Keep ride", style: "cancel" },
-        {
-          text: status === "COMPLETED" ? "Complete ride" : "Cancel ride",
-          style: status === "CANCELLED" ? "destructive" : "default",
-          onPress: () => {
-            void (async () => {
-              try {
-                const updated = await updateRideStatus(ride.id, status);
-                setRides((current) => current.map((item) => item.id === ride.id ? updated : item));
-                Alert.alert("Ride updated", `Ride #${ride.id} is now ${status.toLowerCase()}.`);
-              } catch (error: any) {
-                const message = error?.response?.data?.message || "Could not update this ride. Please try again.";
-                Alert.alert("Update failed", message);
-              }
-            })();
-          },
+    const title = `${status === "COMPLETED" ? "Complete" : "Cancel"} ride?`;
+    const body = `Are you sure you want to ${verb} ride #${ride.id}?`;
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      if (window.confirm(`${title}\n\n${body}`)) {
+        void performStatusUpdate(ride, status);
+      }
+      return;
+    }
+
+    Alert.alert(title, body, [
+      { text: "Keep ride", style: "cancel" },
+      {
+        text: status === "COMPLETED" ? "Complete ride" : "Cancel ride",
+        style: status === "CANCELLED" ? "destructive" : "default",
+        onPress: () => {
+          void performStatusUpdate(ride, status);
         },
-      ]
-    );
+      },
+    ]);
   };
 
   if (loading) {
@@ -126,12 +154,12 @@ export default function RidesScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <FlatList
-        data={rides}
+        data={filteredRides}
         keyExtractor={(item) => String(item.id)}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.list,
-          rides.length === 0 && styles.emptyList,
+          filteredRides.length === 0 && styles.emptyList,
         ]}
         refreshControl={
           <RefreshControl
@@ -159,19 +187,57 @@ export default function RidesScreen() {
             </Text>
 
             {!error && rides.length > 0 && (
-              <View style={styles.summary}>
-                <View>
-                  <Text style={styles.summaryNumber}>{rides.length}</Text>
-                  <Text style={styles.summaryLabel}>Rides offered</Text>
+              <>
+                <View style={styles.summary}>
+                  <View>
+                    <Text style={styles.summaryNumber}>{rides.length}</Text>
+                    <Text style={styles.summaryLabel}>Rides offered</Text>
+                  </View>
+                  <View style={styles.summaryDivider} />
+                  <View>
+                    <Text style={styles.summaryNumber}>
+                      {rides.filter((ride) => ride.status === "ACTIVE" || ride.status === "FULL").length}
+                    </Text>
+                    <Text style={styles.summaryLabel}>Active rides</Text>
+                  </View>
+                  <View style={styles.summaryDivider} />
+                  <View>
+                    <Text style={styles.summaryNumber}>
+                      {rides.filter((ride) => ride.status === "COMPLETED").length}
+                    </Text>
+                    <Text style={styles.summaryLabel}>Completed</Text>
+                  </View>
                 </View>
-                <View style={styles.summaryDivider} />
-                <View>
-                  <Text style={styles.summaryNumber}>
-                    {rides.filter((ride) => ride.status === "ACTIVE").length}
-                  </Text>
-                  <Text style={styles.summaryLabel}>Active rides</Text>
-                </View>
-              </View>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.filterRow}
+                >
+                  {FILTER_OPTIONS.map((option) => {
+                    const selected = filter === option.key;
+                    return (
+                      <TouchableOpacity
+                        key={option.key}
+                        onPress={() => setFilter(option.key)}
+                        style={[
+                          styles.filterChip,
+                          selected && styles.filterChipActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.filterChipText,
+                            selected && styles.filterChipTextActive,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </>
             )}
           </View>
         }
@@ -179,27 +245,36 @@ export default function RidesScreen() {
           <View style={styles.emptyCard}>
             <Text style={styles.emptyIcon}>{error ? "⚠️" : "🚘"}</Text>
             <Text style={styles.emptyTitle}>
-              {error ? "Couldn't load your rides" : "Your rides start here"}
+              {error
+                ? "Couldn't load your rides"
+                : rides.length > 0
+                  ? `No ${filter.toLowerCase()} rides`
+                  : "Your rides start here"}
             </Text>
             <Text style={styles.secondary}>
-              {error ||
-                "Offer a ride to campus and let other students request a seat."}
+              {error
+                ? error
+                : rides.length > 0
+                  ? "Switch filters above to view your other rides."
+                  : "Offer a ride to campus and let other students request a seat."}
             </Text>
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={() => {
-                if (error) {
-                  setLoading(true);
-                  void loadRides();
-                } else {
-                  router.push("/(tabs)/offer-ride");
-                }
-              }}
-            >
-              <Text style={styles.primaryText}>
-                {error ? "Try again" : "Offer a ride"}
-              </Text>
-            </TouchableOpacity>
+            {rides.length === 0 && (
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={() => {
+                  if (error) {
+                    setLoading(true);
+                    void loadRides();
+                  } else {
+                    router.push("/offer-ride");
+                  }
+                }}
+              >
+                <Text style={styles.primaryText}>
+                  {error ? "Try again" : "Offer a ride"}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
         renderItem={({ item }) => {
@@ -298,7 +373,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   header: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   back: {
     alignSelf: "flex-start",
@@ -333,7 +408,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xl,
+    justifyContent: "space-around",
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -343,6 +418,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.sectionTitle,
     fontWeight: "800",
+    textAlign: "center",
   },
   summaryLabel: {
     marginTop: spacing.xxs,
@@ -353,6 +429,31 @@ const styles = StyleSheet.create({
     width: 1,
     height: 34,
     backgroundColor: colors.border,
+  },
+  filterRow: {
+    gap: spacing.xs,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  filterChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  filterChipActive: {
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
+  },
+  filterChipText: {
+    fontSize: typography.caption,
+    fontWeight: "700",
+    color: colors.textSecondary,
+  },
+  filterChipTextActive: {
+    color: colors.white,
   },
   card: {
     padding: spacing.md,

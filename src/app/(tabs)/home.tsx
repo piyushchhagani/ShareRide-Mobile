@@ -1,15 +1,17 @@
-import React from "react";
+import React, { useCallback } from "react";
+import { StatusBar } from "expo-status-bar";
 import {
   Pressable,
   ScrollView,
-  StatusBar,
+  // StatusBar removed — using expo-status-bar instead
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 
+import { useNotificationStore } from "@/store/notification.store";
 import {
   colors,
   radius,
@@ -18,9 +20,20 @@ import {
 } from "../../theme/tokens";
 
 export default function HomeScreen() {
+  const unreadCount = useNotificationStore((state) => state.unreadCount);
+  const fetchUnreadCount = useNotificationStore(
+    (state) => state.fetchUnreadCount
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      void fetchUnreadCount();
+    }, [fetchUnreadCount])
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <StatusBar style="dark" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -39,17 +52,38 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open profile"
-            onPress={() => router.push("/(tabs)/profile")}
-            style={({ pressed }) => [
-              styles.profileButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.profileGlyph}>♙</Text>
-          </Pressable>
+          <View style={styles.topActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open notifications"
+              onPress={() => router.push("/notifications")}
+              style={({ pressed }) => [
+                styles.profileButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.bellGlyph}>🔔</Text>
+              {unreadCount > 0 ? (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open profile"
+              onPress={() => router.push("/(tabs)/profile")}
+              style={({ pressed }) => [
+                styles.profileButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.profileGlyph}>♙</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Welcome */}
@@ -78,7 +112,7 @@ export default function HomeScreen() {
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push("/(tabs)/find-ride")}
+          onPress={() => router.push("/find-ride")}
           style={({ pressed }) => [
             styles.findCard,
             pressed && styles.pressed,
@@ -110,7 +144,7 @@ export default function HomeScreen() {
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push("/(tabs)/offer-ride")}
+          onPress={() => router.push("/offer-ride")}
           style={({ pressed }) => [
             styles.offerCard,
             pressed && styles.pressed,
@@ -257,6 +291,31 @@ const styles = StyleSheet.create({
   profileGlyph: {
     color: colors.brand,
     fontSize: 26,
+  },
+  topActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  bellGlyph: {
+    fontSize: 19,
+  },
+  unreadBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: colors.danger,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unreadBadgeText: {
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: "800",
   },
   welcome: {
     marginBottom: 30,

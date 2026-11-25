@@ -15,6 +15,7 @@ export type CreateRidePayload = {
 
   vehicleType?: string;
   vehicleNumber?: string;
+  pricePerSeat?: number;
 };
 
 export type FindRidePayload = {
@@ -26,6 +27,11 @@ export type FindRidePayload = {
 
   departureTime: string;
   seats: number;
+
+  vehicleType?: string;
+  sortBy?: "MATCH_SCORE" | "PRICE_ASC" | "DEPARTURE_ASC";
+  page?: number;
+  size?: number;
 };
 
 export type Ride = {
@@ -48,6 +54,7 @@ export type Ride = {
 
   vehicleType?: string;
   vehicleNumber?: string;
+  pricePerSeat?: number | null;
 
   status: string;
 
@@ -57,6 +64,9 @@ export type Ride = {
   pickupScore?: number;
   destinationScore?: number;
   detourScore?: number;
+
+  driverAverageRating?: number | null;
+  driverTotalRatings?: number;
 };
 
 export async function createRide(
@@ -78,9 +88,11 @@ export async function getAllRides(): Promise<Ride[]> {
   return data;
 }
 
-export async function getMyRides(): Promise<Ride[]> {
+export async function getMyRides(statuses?: string[]): Promise<Ride[]> {
+  const params = statuses && statuses.length > 0 ? { status: statuses.join(",") } : undefined;
   const { data } = await api.get<Ride[]>(
-    ENDPOINTS.RIDES.MINE
+    ENDPOINTS.RIDES.MINE,
+    { params }
   );
 
   return data;

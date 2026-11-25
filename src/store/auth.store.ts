@@ -16,6 +16,7 @@ type AuthState = {
   isAuthenticated: boolean;
   isLoading: boolean;
   setSession: (token: string, user: User) => void;
+  updateUser: (user: User) => void;
   restoreSession: () => Promise<void>;
   logout: () => Promise<void>;
   switchAccount: (token: string, user: User) => void;
@@ -37,6 +38,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       isAuthenticated: true,
       isLoading: false,
     });
+  },
+
+  updateUser: (user) => {
+    set({ user });
   },
 
   restoreSession: async () => {

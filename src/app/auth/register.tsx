@@ -18,7 +18,6 @@ import {
   register,
 } from "@/services/auth/auth.service";
 import { useAuthStore } from "@/store/auth.store";
-import { UserRole } from "@/types/auth";
 import { goBackSafely } from "@/utils/navigation";
 
 export default function RegisterScreen() {
@@ -26,8 +25,9 @@ export default function RegisterScreen() {
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("STUDENT");
+  const [role, setRole] = useState<"STUDENT" | "FACULTY">("STUDENT");
   const [isLoading, setIsLoading] = useState(false);
 
   const canSubmit =
@@ -45,6 +45,8 @@ export default function RegisterScreen() {
         name: fullName.trim(),
         email: email.trim(),
         password,
+        phone: phone.trim() || undefined,
+        role,
       });
 
       const response = await login({
@@ -115,6 +117,17 @@ export default function RegisterScreen() {
             placeholderTextColor="#94A3B8"
             autoCapitalize="none"
             keyboardType="email-address"
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Phone number (optional)</Text>
+
+          <TextInput
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="Enter your phone number"
+            placeholderTextColor="#94A3B8"
+            keyboardType="phone-pad"
             style={styles.input}
           />
 

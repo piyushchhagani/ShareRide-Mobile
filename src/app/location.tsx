@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/immutability, react-hooks/exhaustive-deps */
-import { useEffect, useRef, useState } from "react";
+import React, { Component, ReactNode, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -28,6 +28,20 @@ const nativeMaps =
 const NativeMapView = nativeMaps?.default;
 const NativeMarker = nativeMaps?.Marker;
 
+class MapErrorBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) return this.props.fallback;
+    return this.props.children;
+  }
+}
+
 type SearchResult = LocationPoint;
 
 export default function LocationScreen() {
@@ -43,6 +57,7 @@ export default function LocationScreen() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [locationLoading, setLocationLoading] = useState(true);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [mapSelection, setMapSelection] = useState<LocationPoint | null>(null);
@@ -180,42 +195,66 @@ export default function LocationScreen() {
   const performSearch = async (text: string) => {
     try {
       setLoading(true);
+      setSearchError(null);
 
       const controller = new AbortController();
       searchRequest.current = controller;
 
-      const queryText = `${text}, Nagpur, Maharashtra, India`;
       const url =
         `https://nominatim.openstreetmap.org/search` +
         `?format=jsonv2` +
-        `&q=${encodeURIComponent(queryText)}` +
+        `&q=${encodeURIComponent(text)}` +
         `&limit=8` +
         `&addressdetails=1` +
         `&countrycodes=in`;
 
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          Accept: "application/json",
-          "User-Agent": "ShareRide-Mobile/1.0",
-        },
-      });
+      let formatted: SearchResult[] = [];
 
-      if (!response.ok) {
-        throw new Error(`Search failed: ${response.status}`);
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "ShareRide-Mobile/1.0 (campus-ride-sharing)",
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          formatted = (Array.isArray(data) ? data : [])
+            .map((item: any) => ({
+              address: item.display_name || text,
+              latitude: Number(item.lat),
+              longitude: Number(item.lon),
+            }))
+            .filter(
+              (item: SearchResult) =>
+                Number.isFinite(item.latitude) && Number.isFinite(item.longitude)
+            );
+        }
+      } catch (err: any) {
+        if (err?.name === "AbortError") {
+          return;
+        }
       }
 
-      const data = await response.json();
-      const formatted: SearchResult[] = data
-        .map((item: any) => ({
-          address: item.display_name || text,
-          latitude: Number(item.lat),
-          longitude: Number(item.lon),
-        }))
-        .filter(
-          (item: SearchResult) =>
-            Number.isFinite(item.latitude) && Number.isFinite(item.longitude)
-        );
+      if (formatted.length === 0 && Platform.OS !== "web") {
+        try {
+          const geocoded = await Location.geocodeAsync(text);
+          formatted = geocoded
+            .filter(
+              (g) => Number.isFinite(g.latitude) && Number.isFinite(g.longitude)
+            )
+            .slice(0, 5)
+            .map((g) => ({
+              address: text,
+              latitude: g.latitude,
+              longitude: g.longitude,
+            }));
+        } catch {
+          // Ignore native geocoder failure.
+        }
+      }
 
       setResults(formatted);
     } catch (error: any) {
@@ -223,6 +262,7 @@ export default function LocationScreen() {
         return;
       }
 
+      setSearchError("Location search is temporarily unavailable. You can tap on the map or use your current location.");
       setResults([]);
     } finally {
       setLoading(false);
@@ -246,6 +286,7 @@ export default function LocationScreen() {
     };
 
     setMapSelection(nextSelection);
+    applySelection(nextSelection);
 
     try {
       const addresses = await Location.reverseGeocodeAsync({
@@ -276,8 +317,7 @@ export default function LocationScreen() {
         applySelection(resolved);
       }
     } catch {
-      // Keep the fallback address from the map tap.
-      applySelection(nextSelection);
+      // Fallback address already applied above.
     }
   };
 
@@ -341,49 +381,63 @@ export default function LocationScreen() {
         )}
       </View>
 
-      {Platform.OS === "web" ? (
+      {Platform.OS === "web" || !NativeMapView ? (
         <View style={styles.webMapNotice}>
           <Text style={styles.webMapNoticeText}>
             Use search to find a location quickly. Native maps are available on Android and iOS.
           </Text>
         </View>
       ) : (
-        <View style={styles.mapContainer}>
-          <NativeMapView
-            style={styles.map}
-            initialRegion={mapRegion}
-            showsUserLocation={!!currentLocation}
-            showsMyLocationButton={!!currentLocation}
-            onPress={(event: any) =>
-              selectMapLocation(event.nativeEvent.coordinate)
-            }
-          >
-            {currentLocation && !mapSelection && (
-              <NativeMarker coordinate={currentLocation} title="Current location" />
-            )}
+        <MapErrorBoundary
+          fallback={
+            <View style={styles.webMapNotice}>
+              <Text style={styles.webMapNoticeText}>
+                Map preview is unavailable on this device. Search or use current location below.
+              </Text>
+            </View>
+          }
+        >
+          <View style={styles.mapContainer}>
+            <NativeMapView
+              style={styles.map}
+              initialRegion={mapRegion}
+              showsUserLocation={!!currentLocation}
+              showsMyLocationButton={!!currentLocation}
+              onPress={(event: any) =>
+                selectMapLocation(event.nativeEvent.coordinate)
+              }
+            >
+              {currentLocation && !mapSelection && (
+                <NativeMarker coordinate={currentLocation} title="Current location" />
+              )}
+
+              {mapSelection && (
+                <NativeMarker
+                  coordinate={mapSelection}
+                  title={type === "destination" ? "Destination" : "Pickup"}
+                  description={mapSelection.address}
+                />
+              )}
+            </NativeMapView>
+
+            <View pointerEvents="none" style={styles.mapHint}>
+              <Text style={styles.mapHintText}>Tap the map to choose a location</Text>
+            </View>
 
             {mapSelection && (
-              <NativeMarker
-                coordinate={mapSelection}
-                title={type === "destination" ? "Destination" : "Pickup"}
-                description={mapSelection.address}
-              />
+              <TouchableOpacity
+                style={styles.confirmMapButton}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  applySelection(mapSelection);
+                  goBackSafely();
+                }}
+              >
+                <Text style={styles.confirmMapText}>Use this location</Text>
+              </TouchableOpacity>
             )}
-          </NativeMapView>
-
-          <View pointerEvents="none" style={styles.mapHint}>
-            <Text style={styles.mapHintText}>Tap the map to choose a location</Text>
           </View>
-
-          {mapSelection && (
-            <TouchableOpacity
-              style={styles.confirmMapButton}
-              onPress={() => applySelection(mapSelection)}
-            >
-              <Text style={styles.confirmMapText}>Use this location</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        </MapErrorBoundary>
       )}
 
       <TouchableOpacity
@@ -395,7 +449,9 @@ export default function LocationScreen() {
         disabled={locationLoading || !currentLocation}
         onPress={() => {
           if (currentLocation) {
+            Keyboard.dismiss();
             applySelection(currentLocation);
+            goBackSafely();
           }
         }}
       >
@@ -436,7 +492,11 @@ export default function LocationScreen() {
           <TouchableOpacity
             activeOpacity={0.8}
             style={styles.resultCard}
-            onPress={() => applySelection(item)}
+            onPress={() => {
+              Keyboard.dismiss();
+              applySelection(item);
+              goBackSafely();
+            }}
           >
             <View style={styles.resultIconWrap}>
               <Text style={styles.pinIcon}>Pin</Text>
@@ -458,12 +518,14 @@ export default function LocationScreen() {
           !loading && query.trim().length >= 3 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyIcon}>Search</Text>
-              <Text style={styles.emptyTitle}>No locations found</Text>
+              <Text style={styles.emptyTitle}>
+                {searchError ? "Search unavailable" : "No locations found"}
+              </Text>
               <Text style={styles.emptyText}>
-                Try a college, landmark, street or area.
+                {searchError || "Try a college, landmark, street or area."}
               </Text>
             </View>
-          ) : null
+          ) : undefined
         }
       />
 

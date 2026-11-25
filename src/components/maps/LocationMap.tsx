@@ -1,6 +1,6 @@
-﻿import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { WebView } from "react-native-webview";
+import { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
+import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import * as Location from "expo-location";
 
 type LocationPoint = {
@@ -133,15 +133,21 @@ if(p.pickup && p.destination){
    style:{color:'#2563eb',weight:5,opacity:0.85}
   }).addTo(map);
   map.fitBounds(line.getBounds(),{padding:[30,30]});
-  window.ReactNativeWebView.postMessage(JSON.stringify({
-   type:'route',
-   distanceKm:(r.distance/1000).toFixed(1),
-   durationMinutes:Math.round(r.duration/60)
-  }));
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+     type:'route',
+     distanceKm:(r.distance/1000).toFixed(1),
+     durationMinutes:Math.round(r.duration/60)
+    }));
+  }
  })
- .catch(e=>window.ReactNativeWebView.postMessage(JSON.stringify({
-  type:'error',message:e.message
- })));
+ .catch(e=>{
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+     type:'error',message:e.message
+    }));
+  }
+ });
 }
 
 if(bounds.length===1)map.setView(bounds[0],15);
@@ -153,29 +159,37 @@ else if(bounds.length>1)map.fitBounds(bounds,{padding:[30,30]});
 
   return (
     <View style={styles.container}>
-      <WebView
-        key={html}
-        source={{ html }}
-        style={styles.map}
-        originWhitelist={["*"]}
-        javaScriptEnabled
-        domStorageEnabled
-        onMessage={(event) => {
-          try {
-            const message = JSON.parse(event.nativeEvent.data);
-            if (message.type === "route") {
-              setRouteSummary(
-                `${message.distanceKm} km · about ${message.durationMinutes} min`
-              );
-              setRouteError("");
-            } else if (message.type === "error") {
-              setRouteError("Driving route unavailable. Check your connection.");
+      {Platform.OS === "web" ? (
+        <iframe
+          title="Route map"
+          srcDoc={html}
+          style={{ width: "100%", height: "100%", border: "none" }}
+        />
+      ) : (
+        <WebView
+          key={html}
+          source={{ html }}
+          style={styles.map}
+          originWhitelist={["*"]}
+          javaScriptEnabled
+          domStorageEnabled
+          onMessage={(event: WebViewMessageEvent): void => {
+            try {
+              const message = JSON.parse(event.nativeEvent.data);
+              if (message.type === "route") {
+                setRouteSummary(
+                  `${message.distanceKm} km · about ${message.durationMinutes} min`
+                );
+                setRouteError("");
+              } else if (message.type === "error") {
+                setRouteError("Driving route unavailable. Check your connection.");
+              }
+            } catch {
+              setRouteError("Unable to read map information.");
             }
-          } catch {
-            setRouteError("Unable to read map information.");
-          }
-        }}
-      />
+          }}
+        />
+      )}
 
       {loading && (
         <View style={styles.badge}>

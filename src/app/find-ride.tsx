@@ -1,17 +1,16 @@
 import React, { useState } from "react";
+import { StatusBar } from "expo-status-bar";
 import {
-  Modal,
-  Platform,
   Pressable,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import DateTimePicker from "@expo/ui/community/datetime-picker";
+
+import DateTimePickerModal from "@/components/common/DateTimePickerModal";
 
 import LocationSelector from "@/components/location/LocationSelector";
 import LocationMap from "@/components/maps/LocationMap";
@@ -107,7 +106,11 @@ export default function FindRideScreen() {
       return;
     }
 
-    if (pickup === destination) {
+    if (
+      pickup.latitude === destination.latitude &&
+      pickup.longitude === destination.longitude &&
+      pickup.address === destination.address
+    ) {
       setSearchError("Pickup and destination must be different.");
       return;
     }
@@ -128,7 +131,7 @@ export default function FindRideScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <StatusBar style="dark" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -332,76 +335,22 @@ export default function FindRideScreen() {
         </Text>
       </ScrollView>
 
-      <Modal
-        visible={pickerVisible && Platform.OS !== "android"}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setPickerVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close date and time picker"
-            style={styles.modalBackdrop}
-            onPress={() => setPickerVisible(false)}
-          />
-
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-
-            <Text style={styles.modalTitle}>
-              {pickerMode === "date"
-                ? "Choose travel date"
-                : "Choose departure time"}
-            </Text>
-            <Text style={styles.modalSubtitle}>
-              {formatDate(departure)} · {formatTime(departure)}
-            </Text>
-
-            <View style={styles.pickerContainer}>
-              <DateTimePicker
-                value={departure}
-                mode={pickerMode}
-                presentation="inline"
-                minimumDate={
-                  pickerMode === "date" ? startOfToday() : undefined
-                }
-                onValueChange={(_, value) => {
-                  if (value) updateDeparture(value);
-                }}
-                onDismiss={() => setPickerVisible(false)}
-              />
-            </View>
-
-            {dateError ? (
-              <Text style={styles.errorText}>{dateError}</Text>
-            ) : null}
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setPickerVisible(false)}
-              style={styles.doneButton}
-            >
-              <Text style={styles.doneButtonText}>Done</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {Platform.OS === "android" && pickerVisible ? (
-        <DateTimePicker
-          value={departure}
-          mode={pickerMode}
-          presentation="dialog"
-          minimumDate={
-            pickerMode === "date" ? startOfToday() : undefined
-          }
-          onValueChange={(_, value) => {
-            if (value) updateDeparture(value);
-          }}
-          onDismiss={() => setPickerVisible(false)}
-        />
-      ) : null}
+      <DateTimePickerModal
+        visible={pickerVisible}
+        value={departure}
+        mode={pickerMode}
+        minimumDate={pickerMode === "date" ? startOfToday() : new Date()}
+        title={
+          pickerMode === "date"
+            ? "Choose travel date"
+            : "Choose departure time"
+        }
+        onConfirm={(selected) => {
+          updateDeparture(selected);
+          setPickerVisible(false);
+        }}
+        onCancel={() => setPickerVisible(false)}
+      />
     </SafeAreaView>
   );
 }

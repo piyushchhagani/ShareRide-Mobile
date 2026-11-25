@@ -187,14 +187,14 @@ export default function ProfileScreen() {
             icon="➕"
             title="Offer a ride"
             subtitle="Share your journey with students"
-            onPress={() => navigate("/(tabs)/offer-ride")}
+            onPress={() => navigate("/offer-ride")}
           />
           <View style={styles.divider} />
           <MenuItem
             icon="🔎"
             title="Find a ride"
             subtitle="Search available rides"
-            onPress={() => navigate("/(tabs)/find-ride")}
+            onPress={() => navigate("/find-ride")}
           />
         </View>
 
@@ -211,25 +211,36 @@ export default function ProfileScreen() {
           <MenuItem
             icon="⚙️"
             title="Account settings"
-            subtitle="Profile and preferences"
-            onPress={() => {
-              Alert.alert(
-                "Account settings",
-                "The settings screen will be connected to your existing profile and account services in the next phase."
-              );
-            }}
+            subtitle="Edit profile, password, and preferences"
+            onPress={() => navigate("/profile/settings")}
+          />
+          <View style={styles.divider} />
+          <MenuItem
+            icon="🔔"
+            title="Notifications"
+            subtitle="Ride requests and booking updates"
+            onPress={() => navigate("/notifications")}
+          />
+          <View style={styles.divider} />
+          <MenuItem
+            icon="⭐"
+            title="Ratings & reviews"
+            subtitle="View your community feedback"
+            onPress={() => navigate("/profile/ratings")}
+          />
+          <View style={styles.divider} />
+          <MenuItem
+            icon="💳"
+            title="Payments"
+            subtitle="Fares and payment history"
+            onPress={() => navigate("/profile/payments")}
           />
           <View style={styles.divider} />
           <MenuItem
             icon="🛡️"
             title="Safety & support"
             subtitle="Ride safely and get help"
-            onPress={() => {
-              Alert.alert(
-                "Safety & support",
-                "Support options will be added in a later phase."
-              );
-            }}
+            onPress={() => navigate("/profile/safety")}
           />
         </View>
 

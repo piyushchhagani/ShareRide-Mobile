@@ -43,7 +43,7 @@ export default function TabsLayout() {
           title: "Home",
           tabBarAccessibilityLabel: "Home tab",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+            <Ionicons name="home-outline" size={size} color={color as string} />
           ),
         }}
       />
@@ -53,7 +53,7 @@ export default function TabsLayout() {
           title: "My Rides",
           tabBarAccessibilityLabel: "My rides tab",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="car-outline" size={size} color={color} />
+            <Ionicons name="car-outline" size={size} color={color as string} />
           ),
         }}
       />
@@ -63,7 +63,7 @@ export default function TabsLayout() {
           title: "My Bookings",
           tabBarAccessibilityLabel: "My bookings tab",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar-outline" size={size} color={color} />
+            <Ionicons name="calendar-outline" size={size} color={color as string} />
           ),
         }}
       />
@@ -73,12 +73,10 @@ export default function TabsLayout() {
           title: "Profile",
           tabBarAccessibilityLabel: "Profile tab",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-circle-outline" size={size} color={color} />
+            <Ionicons name="person-circle-outline" size={size} color={color as string} />
           ),
         }}
       />
-      <Tabs.Screen name="find-ride" options={{ href: null }} />
-      <Tabs.Screen name="offer-ride" options={{ href: null }} />
     </Tabs>
   );
 }

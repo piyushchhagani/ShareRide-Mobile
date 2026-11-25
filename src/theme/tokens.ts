@@ -26,6 +26,34 @@ export const colors = {
   transparent: "transparent",
 } as const;
 
+export const darkColors = {
+  brand: "#4E7BFF",
+  brandDark: "#2457E6",
+  brandSoft: "#1B294A",
+
+  background: "#0B1120",
+  surface: "#151E32",
+  surfaceSecondary: "#1E293B",
+
+  text: "#F8FAFC",
+  textSecondary: "#94A3B8",
+  textMuted: "#64748B",
+
+  border: "#243047",
+  divider: "#1E293B",
+
+  success: "#34D399",
+  successSoft: "#064E3B",
+  warning: "#FBBF24",
+  warningSoft: "#451A03",
+  danger: "#F87171",
+  dangerSoft: "#450A0A",
+
+  white: "#FFFFFF",
+  black: "#000000",
+  transparent: "transparent",
+} as const;
+
 export const spacing = {
   xxs: 4,
   xs: 8,
@@ -83,6 +111,7 @@ export const shadows = {
 
 export const theme = {
   colors,
+  darkColors,
   spacing,
   radius,
   typography,

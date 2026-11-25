@@ -1,13 +1,12 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { StatusBar } from "expo-status-bar";
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -15,12 +14,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import DateTimePicker from "@expo/ui/community/datetime-picker";
+
+import DateTimePickerModal from "@/components/common/DateTimePickerModal";
 
 import LocationSelector from "@/components/location/LocationSelector";
 import LocationMap from "@/components/maps/LocationMap";
 import { useRideStore } from "@/store/ride.store";
 import { createRide } from "@/services/rides/ride.service";
+import { estimateFare } from "@/services/payments/payment.service";
 import { goBackSafely } from "@/utils/navigation";
 import { colors, radius, spacing } from "@/theme/tokens";
 
@@ -97,6 +98,8 @@ export default function OfferRideScreen() {
   });
 
   const [seats, setSeats] = useState(1);
+  const [pricePerSeat, setPricePerSeat] = useState("");
+  const [suggestedFare, setSuggestedFare] = useState<number | null>(null);
   const [vehicleType, setVehicleType] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -105,6 +108,36 @@ export default function OfferRideScreen() {
 
   const [vehicleTypeError, setVehicleTypeError] = useState("");
   const [vehicleNumberError, setVehicleNumberError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    if (!pickup || !destination) {
+      return;
+    }
+    void (async () => {
+      try {
+        const res = await estimateFare({
+          pickupLat: pickup.latitude,
+          pickupLon: pickup.longitude,
+          destLat: destination.latitude,
+          destLon: destination.longitude,
+        });
+        if (active) {
+          setSuggestedFare(res.suggestedPricePerSeat);
+          setPricePerSeat((current) =>
+            current.trim() ? current : String(res.suggestedPricePerSeat)
+          );
+        }
+      } catch {
+        // Optional suggestion.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [pickup, destination]);
+
+  const activeSuggestedFare = pickup && destination ? suggestedFare : null;
 
   const canPublish =
     Boolean(pickup && destination) &&
@@ -132,7 +165,11 @@ export default function OfferRideScreen() {
       return;
     }
 
-    if (pickup === destination) {
+    if (
+      pickup.latitude === destination.latitude &&
+      pickup.longitude === destination.longitude &&
+      pickup.address === destination.address
+    ) {
       setFormError("Pickup and destination must be different.");
       return;
     }
@@ -152,6 +189,7 @@ export default function OfferRideScreen() {
     try {
       setLoading(true);
 
+      const parsedPrice = pricePerSeat.trim() ? Number(pricePerSeat.trim()) : undefined;
       await createRide({
         pickupAddress: pickup.address,
         pickupLatitude: pickup.latitude,
@@ -163,23 +201,32 @@ export default function OfferRideScreen() {
         availableSeats: seats,
         vehicleType: vehicleType.trim(),
         vehicleNumber: vehicleNumber.trim().toUpperCase(),
+        pricePerSeat:
+          parsedPrice !== undefined && Number.isFinite(parsedPrice) && parsedPrice >= 0
+            ? parsedPrice
+            : undefined,
       });
 
-      Alert.alert(
-        "Ride published",
-        "Your ride has been submitted successfully.",
-        [
-          {
-            text: "View my rides",
-            onPress: () => router.replace("/profile/my-rides"),
-          },
-          {
-            text: "Done",
-            style: "cancel",
-            onPress: () => goBackSafely(),
-          },
-        ]
-      );
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.alert("Ride published\n\nYour ride has been submitted successfully.");
+        router.replace("/profile/my-rides");
+      } else {
+        Alert.alert(
+          "Ride published",
+          "Your ride has been submitted successfully.",
+          [
+            {
+              text: "View my rides",
+              onPress: () => router.replace("/profile/my-rides"),
+            },
+            {
+              text: "Done",
+              style: "cancel",
+              onPress: () => goBackSafely(),
+            },
+          ]
+        );
+      }
     } catch (error: unknown) {
       const message =
         typeof error === "object" &&
@@ -194,10 +241,15 @@ export default function OfferRideScreen() {
             ).response?.data?.message
           : undefined;
 
-      Alert.alert(
-        "Unable to publish ride",
-        message || "Please check your connection and try again."
-      );
+      const errorMessage =
+        message || "Please check your connection and try again.";
+
+      setFormError(errorMessage);
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.alert(`Unable to publish ride\n\n${errorMessage}`);
+      } else {
+        Alert.alert("Unable to publish ride", errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -205,7 +257,7 @@ export default function OfferRideScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <StatusBar style="dark" />
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -401,6 +453,20 @@ export default function OfferRideScreen() {
               error={vehicleNumberError}
               autoCapitalize="characters"
             />
+
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>
+                Fare per seat (₹){activeSuggestedFare != null ? ` · Suggested ₹${activeSuggestedFare}` : ""}
+              </Text>
+              <TextInput
+                value={pricePerSeat}
+                onChangeText={setPricePerSeat}
+                placeholder={activeSuggestedFare != null ? String(activeSuggestedFare) : "e.g. 50"}
+                placeholderTextColor={colors.textMuted}
+                keyboardType="numeric"
+                style={styles.input}
+              />
+            </View>
           </View>
 
           <View style={styles.infoNote}>
@@ -444,84 +510,19 @@ export default function OfferRideScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Modal
-        visible={pickerVisible && Platform.OS !== "android"}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setPickerVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close date and time picker"
-            style={styles.modalBackdrop}
-            onPress={() => setPickerVisible(false)}
-          />
-
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-
-            <Text style={styles.modalTitle}>Set departure</Text>
-            <Text style={styles.modalSubtitle}>
-              {formatDate(departure)} · {formatTime(departure)}
-            </Text>
-
-            <View style={styles.pickerContainer}>
-              <DateTimePicker
-                value={departure}
-                mode="datetime"
-                presentation={Platform.OS === "android" ? "dialog" : "inline"}
-                minimumDate={new Date()}
-                onValueChange={(_, value) => {
-                  if (!value) return;
-
-                  if (value.getTime() > Date.now()) {
-                    setDeparture(value);
-                    setFormError("");
-                  } else {
-                    setFormError("Choose a future departure date and time.");
-                  }
-                }}
-                onDismiss={() => setPickerVisible(false)}
-              />
-            </View>
-
-            {departure.getTime() <= new Date().getTime() ? (
-              <Text style={styles.errorText}>
-                Choose a future departure date and time.
-              </Text>
-            ) : null}
-
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setPickerVisible(false)}
-              style={styles.doneButton}
-            >
-              <Text style={styles.doneButtonText}>Done</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {Platform.OS === "android" && pickerVisible ? (
-        <DateTimePicker
-          value={departure}
-          mode="datetime"
-          presentation="dialog"
-          minimumDate={new Date()}
-          onValueChange={(_, value) => {
-            if (!value) return;
-
-            if (value.getTime() > Date.now()) {
-              setDeparture(value);
-              setFormError("");
-            } else {
-              setFormError("Choose a future departure date and time.");
-            }
-          }}
-          onDismiss={() => setPickerVisible(false)}
-        />
-      ) : null}
+      <DateTimePickerModal
+        visible={pickerVisible}
+        value={departure}
+        mode="datetime"
+        minimumDate={new Date()}
+        title="Set departure"
+        onConfirm={(selected) => {
+          setDeparture(selected);
+          setFormError("");
+          setPickerVisible(false);
+        }}
+        onCancel={() => setPickerVisible(false)}
+      />
     </SafeAreaView>
   );
 }

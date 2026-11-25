@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, router } from "expo-router";
 
 import {
   getRideRequests,
@@ -280,11 +280,33 @@ export default function DriverRequestsScreen() {
                     </TouchableOpacity>
                   </View>
                 ) : (
-                  <Text style={[styles.finalStatus, { color: statusColor }]}>
-                    {isAccepted
-                      ? "This passenger request has been accepted."
-                      : "This request is no longer pending."}
-                  </Text>
+                  <View>
+                    <Text style={[styles.finalStatus, { color: statusColor }]}>
+                      {isAccepted
+                        ? "This passenger request has been accepted."
+                        : "This request is no longer pending."}
+                    </Text>
+                    {isAccepted && item.rideStatus === "COMPLETED" ? (
+                      <TouchableOpacity
+                        style={styles.ratePassengerButton}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/rate-ride",
+                            params: {
+                              rideId: String(item.rideId),
+                              ratedUserId: String(item.passengerId),
+                              ratedUserName: item.passengerName || "Passenger",
+                              roleLabel: "passenger",
+                            },
+                          })
+                        }
+                      >
+                        <Text style={styles.ratePassengerText}>
+                          Rate passenger ★
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
                 )}
               </View>
             );
@@ -438,6 +460,19 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     fontSize: typography.body,
     fontWeight: "700",
+  },
+  ratePassengerButton: {
+    marginTop: spacing.sm,
+    minHeight: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.warningSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ratePassengerText: {
+    color: colors.warning,
+    fontSize: typography.caption,
+    fontWeight: "800",
   },
   center: {
     flex: 1,

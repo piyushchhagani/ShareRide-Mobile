@@ -66,6 +66,25 @@ export type User = {
   name: string;
   email: string;
   role: string;
+  phone?: string | null;
+  avatarUrl?: string | null;
+  rideUpdatesEnabled?: boolean;
+  bookingUpdatesEnabled?: boolean;
+  productUpdatesEnabled?: boolean;
+  locationAssistanceEnabled?: boolean;
+};
+
+export type UpdateProfilePayload = {
+  name: string;
+  phone?: string;
+  avatarUrl?: string;
+};
+
+export type UpdatePreferencesPayload = {
+  rideUpdatesEnabled?: boolean;
+  bookingUpdatesEnabled?: boolean;
+  productUpdatesEnabled?: boolean;
+  locationAssistanceEnabled?: boolean;
 };
 
 export type LoginPayload = {
@@ -112,6 +131,7 @@ export async function register(
     email: string;
     password: string;
     phone?: string;
+    role?: "STUDENT" | "FACULTY";
   }
 ): Promise<void> {
   await api.post(ENDPOINTS.AUTH.REGISTER, {
@@ -119,6 +139,7 @@ export async function register(
     email: payload.email.trim(),
     password: payload.password,
     phone: payload.phone?.trim() || undefined,
+    role: payload.role,
   });
 }
 
@@ -131,6 +152,59 @@ export async function getCurrentUser(): Promise<User> {
     ENDPOINTS.AUTH.ME
   );
 
+  return data;
+}
+
+export async function updateProfile(
+  payload: UpdateProfilePayload
+): Promise<User> {
+  const { data } = await api.put<User>(ENDPOINTS.AUTH.PROFILE, {
+    name: payload.name.trim(),
+    phone: payload.phone?.trim() || null,
+    avatarUrl: payload.avatarUrl?.trim() || null,
+  });
+  return data;
+}
+
+export async function updatePreferences(
+  payload: UpdatePreferencesPayload
+): Promise<User> {
+  const { data } = await api.put<User>(ENDPOINTS.AUTH.PREFERENCES, payload);
+  return data;
+}
+
+export async function changePassword(payload: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<{ message: string }> {
+  const { data } = await api.put<{ message: string }>(
+    ENDPOINTS.AUTH.PASSWORD,
+    payload
+  );
+  return data;
+}
+
+export async function forgotPassword(
+  email: string
+): Promise<{ message: string; devResetToken?: string }> {
+  const { data } = await api.post<{ message: string; devResetToken?: string }>(
+    ENDPOINTS.AUTH.FORGOT_PASSWORD,
+    { email: email.trim() }
+  );
+  return data;
+}
+
+export async function resetPassword(payload: {
+  token: string;
+  newPassword: string;
+}): Promise<{ message: string }> {
+  const { data } = await api.post<{ message: string }>(
+    ENDPOINTS.AUTH.RESET_PASSWORD,
+    {
+      token: payload.token.trim(),
+      newPassword: payload.newPassword,
+    }
+  );
   return data;
 }
 
