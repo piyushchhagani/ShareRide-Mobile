@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
+import Constants from "expo-constants";
 import * as Location from "expo-location";
 import type { Region } from "react-native-maps";
 
@@ -23,8 +24,10 @@ import {
 } from "@/store/location.store";
 import { goBackSafely } from "@/utils/navigation";
 
+const mapsConfigured =
+  Platform.OS !== "android" || Boolean(Constants.expoConfig?.extra?.mapsConfigured);
 const nativeMaps =
-  Platform.OS === "web" ? null : require("react-native-maps");
+  Platform.OS === "web" || !mapsConfigured ? null : require("react-native-maps");
 const NativeMapView = nativeMaps?.default;
 const NativeMarker = nativeMaps?.Marker;
 

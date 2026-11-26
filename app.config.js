@@ -7,26 +7,31 @@ module.exports = ({ config }) => {
     (plugin) => !(Array.isArray(plugin) && plugin[0] === "react-native-maps")
   );
 
+  if (mapsApiKey) {
+    plugins.push([
+      "react-native-maps",
+      {
+        androidGoogleMapsApiKey: mapsApiKey,
+      },
+    ]);
+  }
+
   return {
     ...base,
-    plugins: [
-      ...plugins,
-      [
-        "react-native-maps",
-        {
-          androidGoogleMapsApiKey: mapsApiKey,
-        },
-      ],
-    ],
+    plugins,
     android: {
       ...base.android,
-      config: {
-        ...base.android?.config,
-        googleMaps: {
-          ...base.android?.config?.googleMaps,
-          apiKey: mapsApiKey,
-        },
-      },
+      ...(mapsApiKey
+        ? {
+            config: {
+              ...base.android?.config,
+              googleMaps: {
+                ...base.android?.config?.googleMaps,
+                apiKey: mapsApiKey,
+              },
+            },
+          }
+        : {}),
     },
     extra: {
       ...base.extra,
