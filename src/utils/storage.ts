@@ -11,7 +11,11 @@ export async function setStorageItem(key: string, value: string): Promise<void> 
       console.warn("Web localStorage setItem failed:", error);
     }
   } else {
-    await SecureStore.setItemAsync(key, value);
+    try {
+      await SecureStore.setItemAsync(key, value);
+    } catch (error) {
+      console.warn("SecureStore setItemAsync failed:", error);
+    }
   }
 }
 
@@ -27,7 +31,12 @@ export async function getStorageItem(key: string): Promise<string | null> {
       return null;
     }
   } else {
-    return SecureStore.getItemAsync(key);
+    try {
+      return await SecureStore.getItemAsync(key);
+    } catch (error) {
+      console.warn("SecureStore getItemAsync failed:", error);
+      return null;
+    }
   }
 }
 
@@ -41,6 +50,10 @@ export async function deleteStorageItem(key: string): Promise<void> {
       console.warn("Web localStorage removeItem failed:", error);
     }
   } else {
-    await SecureStore.deleteItemAsync(key);
+    try {
+      await SecureStore.deleteItemAsync(key);
+    } catch (error) {
+      console.warn("SecureStore deleteItemAsync failed:", error);
+    }
   }
 }
