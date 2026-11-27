@@ -21,6 +21,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const canSubmit =
     email.trim().length > 0 && password.length > 0;
@@ -30,6 +31,7 @@ export default function LoginScreen() {
 
     try {
       setIsLoading(true);
+      setErrorMessage(null);
 
       const response = await login({
         email: email.trim(),
@@ -52,7 +54,13 @@ export default function LoginScreen() {
             error?.message ||
             "Unable to login. Please try again.";
 
-      Alert.alert("Login failed", String(message));
+      const text = String(message);
+      setErrorMessage(text);
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.alert(`Login failed: ${text}`);
+      } else {
+        Alert.alert("Login failed", text);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -107,6 +115,10 @@ export default function LoginScreen() {
           >
             <Text style={styles.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
+
+          {errorMessage ? (
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          ) : null}
 
           <TouchableOpacity
             disabled={!canSubmit || isLoading}
@@ -241,5 +253,11 @@ const styles = StyleSheet.create({
     color: "#2563EB",
     fontSize: 13,
     fontWeight: "700",
+  },
+  errorText: {
+    color: "#DC2626",
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 12,
   },
 });
